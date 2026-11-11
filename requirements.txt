@@ -1,0 +1,13 @@
+# 건강검진 수치 해석 어시스턴트 의존성
+fastapi
+uvicorn
+pydantic
+python-dotenv
+boto3
+langchain
+langchain-aws
+langchain-chroma
+chromadb
+langgraph
+pytest
+httpx
