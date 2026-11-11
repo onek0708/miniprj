@@ -289,7 +289,8 @@ def _invoke_agent(question: str) -> dict:
 
     load_dotenv()
     rec = _Recorder()
-    model = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-5-20250929-v1:0", region_name="us-east-1")
+    # us. 추론 프로필이 일일 토큰 한도에 걸려 같은 Sonnet 4.5의 global. 추론 프로필로 호출한다
+    model = ChatBedrockConverse(model="global.anthropic.claude-sonnet-4-5-20250929-v1:0", region_name="us-east-1")
     agent = create_agent(model, _build_tools(rec), system_prompt=SYSTEM_PROMPT)
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
     answer = ensure_band_consistency(result["messages"][-1].text, rec.trace)  # 구간 표기는 코드 판정과 대조한다
