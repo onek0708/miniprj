@@ -1,0 +1,85 @@
+{
+  "checked_at": "2026-11-12 21:24:18",
+  "results": [
+    {
+      "region": "us-west-2",
+      "model": "us.anthropic.claude-sonnet-4-6",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-west-2",
+      "model": "global.anthropic.claude-sonnet-4-6",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-east-1",
+      "model": "us.anthropic.claude-sonnet-4-6",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-east-1",
+      "model": "global.anthropic.claude-sonnet-4-6",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "ap-northeast-2",
+      "model": "global.anthropic.claude-sonnet-4-6",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-west-2",
+      "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-west-2",
+      "model": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-east-1",
+      "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "us-east-1",
+      "model": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    },
+    {
+      "region": "ap-northeast-2",
+      "model": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "temperature": 0,
+      "max_tokens": 5,
+      "result": "ok",
+      "response": "안녕하"
+    }
+  ]
+}
