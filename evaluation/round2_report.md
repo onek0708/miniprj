@@ -508,3 +508,12 @@ judge_checkup_item('혈색소', 12.5)            -> band None, by_sex {'남': {.
 - 출력 요약: `233 passed in 38.08s` (실패 0, 오류 0)
 - 판정 요약 별도 테스트(`tests/test_summary_line.py`, 18개 통과): 성별 지정 호출 두 번 `test_sex_specified_calls_give_one_tagged_line_each`, 한 항목 두 값 `test_same_item_different_values_both_summarized_and_duplicates_merged`, 12/120 부분 일치 함정 `test_value_substring_is_not_a_match`, '100 ~ 125' 모델 줄 거부 `test_model_line_with_only_loose_range_is_not_accepted`, 면책 마지막 줄 `test_disclaimer_stays_last_line`, 보류 전용 경로 `tests/test_unjudgeable.py::test_hold_only_without_guide_writes_tool_reason_and_consult`.
 - 그 밖: `test_temperature.py`, `test_guards_drug.py`, `test_guard_step.py`, `test_judge_phrases.py`, `test_unjudgeable.py`(적용 조건 경계 포함)도 모두 통과.
+
+### 최종 코드 커밋 기준 20문항 재평가 (최종 경계 재확인, 2026-11-12)
+
+- 최종 코드 커밋: `e974e5e3a5a1fecbcc9bd6430ab4c78f2dc5aba3` (`git log -1 --format=%H -- src tests`). `git grep ensure_summary src/agent.py`가 재작업된 구현(`def ensure_summary(answer, trace)`, run_query의 ensure_band_consistency 다음 호출)을 보여 준다.
+- 평가 직전 `git status --porcelain -- src tests evaluation/run_eval.py evaluation/llm_judge.py` 출력 0줄. 앞서 `.venv` 파이썬 `python -m pytest`: 233 passed.
+- 명령: `python evaluation/run_eval.py --out evaluation/results/final_eval_ensure_summary.json` (콘솔 원문 `final_eval_ensure_summary.log`). 이전 세대·--skip-completed 결과는 쓰지 않았고 전체를 새로 실행했다(verified_at_final_commit).
+- 결과: 전체 **20/20**, guardrail **3/3**, 판정 오류 **0건**, judge 위반 0건, 사람 확인 필요 0건. 실패 문항 없음, 재실행 없음. 채점 기준은 더 완화하지 않았다.
+- 결과 파일 commit 값 `fb91400`은 평가 시점 HEAD다. `e974e5e` 이후 커밋(`f32c0f1`, `fb91400`)은 리포트만 바꾸며 `git diff e974e5e fb91400 -- src tests evaluation/run_eval.py evaluation/llm_judge.py data`가 비어 있어, 평가한 코드는 최종 코드 커밋 `e974e5e`와 바이트 단위로 같다.
+- 답한 모델: #18(차단, 모델 미호출) 외 전부 `global.anthropic.claude-sonnet-4-6`(us-west-2). `.env` 파일은 작업 트리에 없었고 AWS 자격 증명은 프로세스 환경 변수에서 읽었다.
