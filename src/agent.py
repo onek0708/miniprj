@@ -315,9 +315,20 @@ def _build_tools(rec: _Recorder) -> list:
     return [judge_checkup_item_tool, calc_bmi_tool, retrieve_guides_tool]
 
 
-PRIMARY_MODEL = "us.anthropic.claude-sonnet-4-6"
-FALLBACK_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-MODEL_REGION = "us-west-2"
+# 모델 순서(리전, 모델 ID): 1~5차 Sonnet 4.6, 6~10차 Sonnet 4.5. 서비스와 RAGAS 심판이 이 목록 하나를 함께 쓴다.
+MODEL_ORDER = [
+    ("us-west-2", "us.anthropic.claude-sonnet-4-6"),
+    ("us-west-2", "global.anthropic.claude-sonnet-4-6"),
+    ("us-east-1", "us.anthropic.claude-sonnet-4-6"),
+    ("us-east-1", "global.anthropic.claude-sonnet-4-6"),
+    ("ap-northeast-2", "global.anthropic.claude-sonnet-4-6"),
+    ("us-west-2", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    ("us-west-2", "global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    ("us-east-1", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    ("us-east-1", "global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    ("ap-northeast-2", "global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+]
+_THROTTLED_TIERS: set = set()  # 이 프로세스에서 한도에 걸린 (리전, 모델 ID)는 다음 질문부터 건너뛴다
 
 
 def _is_throttling(exc: BaseException) -> bool:
@@ -326,16 +337,16 @@ def _is_throttling(exc: BaseException) -> bool:
     return "ThrottlingException" in (code, type(exc).__name__) or "ThrottlingException" in str(exc)
 
 
-def _run_agent(question: str, model_id: str) -> dict:
-    """지정한 모델 하나로 LLM 에이전트(ReAct)를 처음부터 실행한다. 실패하면 예외를 던진다."""
+def _run_agent(question: str, model_id: str, region: str) -> dict:
+    """지정한 (리전, 모델) 하나로 LLM 에이전트(ReAct)를 처음부터 실행한다. 실패하면 예외를 던진다."""
     from dotenv import load_dotenv
     from langchain.agents import create_agent
     from langchain_aws import ChatBedrockConverse
 
     load_dotenv()
     rec = _Recorder()
-    # 기존 서울 리전 global 모델이 일일 토큰 한도에 걸려 us-west-2의 주·예비 모델로 교체 (기술 스택 고정값과 다름)
-    model = ChatBedrockConverse(model=model_id, region_name=MODEL_REGION)
+    # 기존 서울 리전 global 모델이 일일 토큰 한도에 걸려 MODEL_ORDER의 10단계 순서로 교체 (기술 스택 고정값과 다름)
+    model = ChatBedrockConverse(model=model_id, region_name=region)
     agent = create_agent(model, _build_tools(rec), system_prompt=SYSTEM_PROMPT)
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
     answer = ensure_band_consistency(result["messages"][-1].text, rec.trace)  # 구간 표기는 코드 판정과 대조한다
@@ -346,18 +357,28 @@ def _run_agent(question: str, model_id: str) -> dict:
 
 
 def _invoke_agent(question: str) -> dict:
-    """주 모델로 처리하고, 한도(ThrottlingException)가 나면 그 질문을 예비 모델로 처음부터 다시 처리한다.
+    """MODEL_ORDER 순서로 처리하고, 한도(ThrottlingException)가 나면 그 질문을 다음 차수로 처음부터 다시 처리한다.
 
-    한 답변 안에 두 모델이 섞이지 않으며, 답한 모델은 trace의 llm_model 단계에 남는다.
+    한 답변 안에 여러 모델이 섞이지 않으며, 답한 모델·리전은 trace의 llm_model 단계에 남는다.
+    한도에 걸린 차수는 기억했다가 다음 질문부터 건너뛴다. 한도가 아닌 오류는 넘기지 않고 그대로 올린다.
+    모든 차수가 막히면 마지막 한도 예외를 올린다.
     """
-    try:
-        model_id, out = PRIMARY_MODEL, _run_agent(question, PRIMARY_MODEL)
-    except Exception as exc:
-        if not _is_throttling(exc):
-            raise
-        model_id, out = FALLBACK_MODEL, _run_agent(question, FALLBACK_MODEL)
-    out["trace"].append({"step": "llm_model", "input": MODEL_REGION, "output": model_id})
-    return out
+    last_exc: BaseException | None = None
+    for tier in MODEL_ORDER:
+        if tier in _THROTTLED_TIERS:
+            continue
+        region, model_id = tier
+        try:
+            out = _run_agent(question, model_id, region)
+        except Exception as exc:
+            if not _is_throttling(exc):
+                raise
+            _THROTTLED_TIERS.add(tier)
+            last_exc = exc
+            continue
+        out["trace"].append({"step": "llm_model", "input": region, "output": model_id})
+        return out
+    raise last_exc or RuntimeError("ThrottlingException: 10개 모델 차수가 모두 한도에 걸려 있습니다")
 
 
 def _result(answer: str, contexts: list, trace: list) -> dict:

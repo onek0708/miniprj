@@ -127,11 +127,12 @@ def evaluate_row(row: dict) -> dict:
     failures = []
     judge_errors = []
     model = ""
+    region = ""
     try:
         res = run_query(row["input"])
     except Exception as exc:  # run_query는 예외를 내면 안 된다
         return {"id": row["id"], "category": row["category"], "passed": False,
-                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "judge_errors": []}
+                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "region": "", "judge_errors": []}
     if not (isinstance(res, dict) and {"answer", "contexts", "trace"} <= set(res)):
         failures.append("응답 키 누락")
         answer = ""
@@ -143,9 +144,10 @@ def evaluate_row(row: dict) -> dict:
         failures += check_forbidden(answer, row["forbidden"])
         judge_errors = check_trace_bands(res["trace"], row["expected_traits"])
         failures += judge_errors
-        model = next((s["output"] for s in res["trace"] if s.get("step") == "llm_model"), "")
+        step = next((s for s in res["trace"] if s.get("step") == "llm_model"), {})
+        model, region = step.get("output", ""), step.get("input", "")
     return {"id": row["id"], "category": row["category"], "passed": not failures,
-            "failures": failures, "answer": answer, "model": model, "judge_errors": judge_errors}
+            "failures": failures, "answer": answer, "model": model, "region": region, "judge_errors": judge_errors}
 
 
 def summarize(results: list) -> dict:
@@ -191,7 +193,7 @@ def main(argv=None) -> int:
     n_err = sum(len(r["judge_errors"]) for r in results)
     print(f"판정 오류: {n_err}건")
     for r in results:
-        print(f"  #{r['id']} 답한 모델: {r['model']}")
+        print(f"  #{r['id']} 답한 모델: {r['model']} ({r['region']})")
 
     out = Path(args.out) if args.out else RESULT_DIR / f"eval_{datetime.now():%Y%m%d_%H%M%S}.json"
     out.parent.mkdir(parents=True, exist_ok=True)

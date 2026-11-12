@@ -36,7 +36,7 @@ def test_검색_인자와_중복_제거_제외_문항(tmp_path, capsys):
 def test_두_지표만_재고_NaN이면_무효(tmp_path):
     seen = []
 
-    def scorer(samples, model):
+    def scorer(samples, model, region):
         seen.append(model)
         return [{"context_recall": 1.0, "llm_context_precision_with_reference": 0.5},
                 {"context_recall": float("nan"), "llm_context_precision_with_reference": 0.5}]
@@ -46,3 +46,24 @@ def test_두_지표만_재고_NaN이면_무효(tmp_path):
     assert set(r["metrics"]) == {"context_recall", "context_precision"}
     assert r["valid"] is False and r["nan_ids"] == ["2"]
     assert r["judge_model"].startswith(run_ragas.JUDGE_MODEL)
+
+
+def test_한도로_넘어간_차수의_모델과_리전이_결과에_기록됨(tmp_path):
+    from src.agent import MODEL_ORDER
+
+    class ThrottlingException(Exception):
+        pass
+
+    calls = []
+
+    def scorer(samples, model, region):
+        calls.append((region, model))
+        if len(calls) == 1:
+            raise ThrottlingException("limit")
+        return [{"context_recall": 1.0, "llm_context_precision_with_reference": 1.0}] * len(samples)
+
+    fake = lambda q, k, kw, vw: ([{"doc_id": "d", "text": "t"}], {})  # noqa: E731
+    r = run_ragas.run_retrieval_round(ROWS, _queries(tmp_path), 3, 1.0, 1.0, scorer, fake)
+    region, model = MODEL_ORDER[1]
+    assert calls == MODEL_ORDER[:2]
+    assert r["judge_model"] == f"{model} ({region})"

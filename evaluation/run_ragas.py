@@ -2,7 +2,7 @@
 
 사용법: python evaluation/run_ragas.py [--out 경로]
 - 지표: context_recall, context_precision, faithfulness, answer_relevancy (측정만, 통과 기준 없음)
-- 심판 모델: us-west-2의 Sonnet 4.6(주) → 한도 시 회차를 Haiku 4.5(예비)로 처음부터 다시 채점, 임베딩: Titan v2(us-east-1)
+- 심판 모델: src/agent.py의 MODEL_ORDER 10단계(Sonnet 4.6 5개 → Sonnet 4.5 5개), 한도 시 회차를 다음 차수로 처음부터 다시 채점, 임베딩: Titan v2(us-east-1)
 - contexts가 빈 문항(차단, 없는 정보, 정상만 있는 답 등)은 계산에서 빼고 그 수를 기록한다
 """
 import argparse
@@ -19,12 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
-from src.agent import run_query  # noqa: E402
+from src.agent import MODEL_ORDER, _is_throttling, run_query  # noqa: E402
 
 CSV_PATH = ROOT / "evaluation" / "test_queries.csv"
-JUDGE_MODEL = "us.anthropic.claude-sonnet-4-6"
-JUDGE_FALLBACK_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-JUDGE_REGION = "us-west-2"
+JUDGE_REGION, JUDGE_MODEL = MODEL_ORDER[0]  # 1차 (리전, 모델). 심판도 서비스와 같은 MODEL_ORDER를 쓴다
 EMBED_MODEL = "amazon.titan-embed-text-v2:0"
 EMBED_REGION = "us-east-1"
 METRIC_NAMES = ["context_recall", "context_precision", "faithfulness", "answer_relevancy"]
@@ -125,13 +123,7 @@ def collect_queries(rows: list, out: Path) -> dict:
     return payload
 
 
-def _is_throttling(exc: BaseException) -> bool:
-    """Bedrock 한도(ThrottlingException) 오류인지 확인한다."""
-    code = getattr(exc, "response", {}).get("Error", {}).get("Code", "") if hasattr(exc, "response") else ""
-    return "ThrottlingException" in (code, type(exc).__name__) or "ThrottlingException" in str(exc)
-
-
-def score(samples: list, model_id: str = JUDGE_MODEL, retrieval_only: bool = False) -> list:
+def score(samples: list, model_id: str = JUDGE_MODEL, region: str = JUDGE_REGION, retrieval_only: bool = False) -> list:
     """RAGAS 지표를 계산해 문항별 점수 목록을 돌려준다(retrieval_only면 검색 지표 둘만). 한도에 걸리면 ThrottlingException을 낸다."""
     from langchain_aws import BedrockEmbeddings, ChatBedrockConverse
     from ragas import EvaluationDataset, RunConfig, evaluate
@@ -161,7 +153,7 @@ def score(samples: list, model_id: str = JUDGE_MODEL, retrieval_only: bool = Fal
                     throttled.append(exc)
                 raise
 
-    llm = LangchainLLMWrapper(_FlagChat(model=model_id, region_name=JUDGE_REGION, temperature=0))
+    llm = LangchainLLMWrapper(_FlagChat(model=model_id, region_name=region, temperature=0))
     emb = LangchainEmbeddingsWrapper(BedrockEmbeddings(model_id=EMBED_MODEL, region_name=EMBED_REGION))
     dataset = EvaluationDataset.from_list(
         [{k: s[k] for k in ("user_input", "response", "retrieved_contexts", "reference")} for s in samples])
@@ -212,8 +204,8 @@ def run_retrieval_round(rows: list, queries_path: Path, k: int, keyword_weight: 
                         scorer=None, retriever=None) -> dict:
     """한 설정을 한 회차 재서 context_recall·context_precision만 돌려준다. NaN 문항이 있으면 회차를 무효로 표시한다."""
     samples, excluded = build_retrieval_samples(rows, queries_path, k, keyword_weight, vector_weight, retriever)
-    base = scorer or (lambda s, m: score(s, m, retrieval_only=True))
-    records, judge_model = score_round(samples, base) if samples else ([], JUDGE_MODEL)
+    base = scorer or (lambda s, m, r: score(s, m, r, retrieval_only=True))
+    records, judge_model, judge_region = score_round(samples, base) if samples else ([], JUDGE_MODEL, JUDGE_REGION)
     alias = {"context_recall": "context_recall", "llm_context_precision_with_reference": "context_precision"}
     per_question = []
     for s, rec in zip(samples, records):
@@ -229,26 +221,27 @@ def run_retrieval_round(rows: list, queries_path: Path, k: int, keyword_weight: 
             nan_ids.append(q["id"])
     means = [summary[n]["mean"] for n in summary]
     return {"k": k, "keyword_weight": keyword_weight, "vector_weight": vector_weight,
-            "judge_model": f"{judge_model} ({JUDGE_REGION})", "evaluated": len(samples),
+            "judge_model": f"{judge_model} ({judge_region})", "evaluated": len(samples),
             "excluded_ids": excluded, "metrics": summary, "nan_ids": nan_ids, "valid": not nan_ids and bool(samples),
             "selection_score": round(sum(means) / 2, 4) if not nan_ids and None not in means else None,
             "per_question": per_question}
 
 
-def score_round(samples: list, scorer=None) -> tuple[list, str]:
-    """한 회차를 한 모델로만 채점한다. 주 모델이 한도에 걸리면 그 회차를 예비 모델로 처음부터 다시 채점한다.
+def score_round(samples: list, scorer=None) -> tuple[list, str, str]:
+    """한 회차를 한 모델로만 채점한다. 한도에 걸리면 그 회차를 MODEL_ORDER의 다음 차수로 처음부터 다시 채점한다.
 
-    돌려주는 값은 (문항별 점수, 채점 모델 ID)이며, 예비 모델로 넘어가면 주 모델 결과는 버린다.
-    두 모델 모두 한도에 걸리면 예외를 그대로 올려 호출자가 멈추게 한다.
+    돌려주는 값은 (문항별 점수, 채점 모델 ID, 채점 리전)이며, 넘어가면 앞 차수 결과는 버린다.
+    한도가 아닌 오류는 넘기지 않고 올린다. 10개 차수가 모두 한도에 걸리면 마지막 예외를 올려 호출자가 멈추게 한다.
     """
     scorer = scorer or score
-    try:
-        return scorer(samples, JUDGE_MODEL), JUDGE_MODEL
-    except Exception as exc:
-        if not _is_throttling(exc):
-            raise
-        print(f"[채점 모델] 주 모델 한도 → 예비 모델 {JUDGE_FALLBACK_MODEL}로 회차를 처음부터 다시 채점", flush=True)
-        return scorer(samples, JUDGE_FALLBACK_MODEL), JUDGE_FALLBACK_MODEL
+    for i, (region, model_id) in enumerate(MODEL_ORDER):
+        try:
+            return scorer(samples, model_id, region), model_id, region
+        except Exception as exc:
+            if not _is_throttling(exc) or i == len(MODEL_ORDER) - 1:
+                raise
+            nxt = MODEL_ORDER[i + 1]
+            print(f"[채점 모델] {i + 1}차 한도 → {i + 2}차 {nxt[1]} ({nxt[0]})로 회차를 처음부터 다시 채점", flush=True)
 
 
 def _mean(values: list):
@@ -282,8 +275,8 @@ def main(argv=None) -> int:
         collect_queries(rows, Path(args.collect_queries))
         return 0
     samples, excluded = collect_samples(rows)
-    records, judge_model = score_round(samples) if samples else ([], JUDGE_MODEL)
-    print(f"[채점 모델] {judge_model} ({JUDGE_REGION})", flush=True)
+    records, judge_model, judge_region = score_round(samples) if samples else ([], JUDGE_MODEL, JUDGE_REGION)
+    print(f"[채점 모델] {judge_model} ({judge_region})", flush=True)
 
     # ragas 결과 열 이름(llm_context_precision_with_reference, answer_relevancy 등)을 제출 지표 이름으로 맞춘다
     alias = {"context_recall": "context_recall", "llm_context_precision_with_reference": "context_precision",
@@ -304,7 +297,7 @@ def main(argv=None) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {"created_at": datetime.now().isoformat(timespec="seconds"),
-               "judge_model": f"{judge_model} ({JUDGE_REGION})", "embedding_model": f"{EMBED_MODEL} ({EMBED_REGION})",
+               "judge_model": f"{judge_model} ({judge_region})", "embedding_model": f"{EMBED_MODEL} ({EMBED_REGION})",
                "total_questions": len(rows), "evaluated": len(samples),
                "excluded_empty_contexts": len(excluded), "excluded_ids": excluded,
                "metrics": summary, "per_question": per_question}
