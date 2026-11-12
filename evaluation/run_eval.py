@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from evaluation import llm_judge  # noqa: E402
 from src.agent import DISCLAIMER, run_query  # noqa: E402
 
 CSV_PATH = ROOT / "evaluation" / "test_queries.csv"
@@ -92,6 +93,33 @@ def check_trace_bands(trace: list, traits: str) -> list:
     return errors
 
 
+REFERRAL_KEYWORDS = ("진료", "의료기관", "전문의")
+
+
+def check_expected_tools(trace: list, expected_tools: str) -> list:
+    """expected_tools 열의 도구가 trace의 step에 모두 있는지 확인하고 실패 사유를 돌려준다."""
+    steps = {s.get("step") for s in trace}
+    return [f"도구 미호출: {t}" for t in (x.strip() for x in expected_tools.split(";")) if t and t not in steps]
+
+
+def check_referral(trace: list, answer: str) -> list:
+    """trace의 판정 결과에 질환의심이 있으면 answer에 진료 권고 키워드가 있는지 확인한다."""
+    suspected = False
+    for step in trace:
+        if step.get("step") != "judge_checkup_item":
+            continue
+        try:
+            r = json.loads(step["output"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        bands = [r.get("band")] + [(v or {}).get("band") for v in (r.get("by_sex") or {}).values()]
+        if "질환의심" in bands:
+            suspected = True
+    if suspected and not any(k in answer for k in REFERRAL_KEYWORDS):
+        return ["진료 권고 누락: 질환의심 판정이 있으나 진료·의료기관·전문의 키워드 없음"]
+    return []
+
+
 def get_commit() -> str:
     """평가 대상 버전(커밋 해시)을 돌려준다."""
     try:
@@ -122,9 +150,55 @@ def check_forbidden(answer: str, forbidden: str) -> list:
     return failures
 
 
-def evaluate_row(row: dict) -> dict:
+def split_items(text: str) -> list:
+    """`;`로 구분된 CSV 칸을 항목 목록으로 나눈다."""
+    return [t.strip() for t in text.split(";") if t.strip()]
+
+
+def judge_targets(row: dict) -> tuple:
+    """judge에 맡길 항목을 고른다: 숫자가 든 키워드형 금지 항목과 `구간:` 토큰은 코드가 보므로 뺀다."""
+    forbidden = [f for f in split_items(row["forbidden"]) if not re.search(r"\d", f) and not f.startswith("구간:")]
+    traits = [t for t in split_items(row["expected_traits"]) if not t.startswith("구간:")]
+    return forbidden, traits
+
+
+def apply_judge(row: dict, answer: str, judge_fn=None) -> tuple:
+    """judge 판정을 결과로 바꾼다. 위반·미충족은 실패 사유로, 호출 실패·해석 불가는 사람 확인 항목으로 돌려준다.
+
+    돌려주는 값: (failures, review). review는 사람 확인이 필요 없으면 None,
+    필요하면 {id, answer, judge_raw, reason} 사전이다.
+    """
+    forbidden, traits = judge_targets(row)
+    if not forbidden and not traits:
+        return [], None
+    review = {"id": row["id"], "answer": answer, "judge_raw": ""}
+    try:
+        out = (judge_fn or llm_judge.judge)(row["input"], answer, forbidden, traits)
+    except Exception as exc:  # 한도 외 오류·10개 차수 소진 등: 실패로 세지 않고 사람이 본다
+        return [], {**review, "reason": f"judge 호출 실패: {type(exc).__name__}: {exc}"}
+    review["judge_raw"] = out.get("raw", "")
+    verdicts = out.get("verdicts")
+    if not isinstance(verdicts, dict):
+        return [], {**review, "reason": "judge 응답 해석 불가"}
+    failures, missing = [], []
+    for key, items, flag, label in (("forbidden", forbidden, "violated", "judge 위반"),
+                                    ("traits", traits, "met", "judge 미충족")):
+        by_id = {v.get("id"): v for v in verdicts.get(key) or [] if isinstance(v, dict)}
+        for i, item in enumerate(items, 1):
+            v = by_id.get(f"{'F' if key == 'forbidden' else 'T'}{i}")
+            if not v or not isinstance(v.get(flag), bool):
+                missing.append(item)
+            elif (v[flag] if key == "forbidden" else not v[flag]):
+                failures.append(f"{label}: {item}")
+    if missing:
+        return failures, {**review, "reason": f"judge 응답에 판정 없음: {', '.join(missing)}"}
+    return failures, None
+
+
+def evaluate_row(row: dict, judge_fn=None) -> dict:
     """문항 하나를 실행해 통과 여부와 실패 사유를 만든다."""
     failures = []
+    review = None
     judge_errors = []
     model = ""
     region = ""
@@ -132,7 +206,7 @@ def evaluate_row(row: dict) -> dict:
         res = run_query(row["input"])
     except Exception as exc:  # run_query는 예외를 내면 안 된다
         return {"id": row["id"], "category": row["category"], "passed": False,
-                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "region": "", "judge_errors": []}
+                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "region": "", "judge_errors": [], "needs_human_review": None}
     if not (isinstance(res, dict) and {"answer", "contexts", "trace"} <= set(res)):
         failures.append("응답 키 누락")
         answer = ""
@@ -144,10 +218,15 @@ def evaluate_row(row: dict) -> dict:
         failures += check_forbidden(answer, row["forbidden"])
         judge_errors = check_trace_bands(res["trace"], row["expected_traits"])
         failures += judge_errors
+        failures += check_expected_tools(res["trace"], row["expected_tools"])
+        failures += check_referral(res["trace"], answer)
+        judge_failures, review = apply_judge(row, answer, judge_fn)
+        failures += judge_failures
         step = next((s for s in res["trace"] if s.get("step") == "llm_model"), {})
         model, region = step.get("output", ""), step.get("input", "")
     return {"id": row["id"], "category": row["category"], "passed": not failures,
-            "failures": failures, "answer": answer, "model": model, "region": region, "judge_errors": judge_errors}
+            "failures": failures, "answer": answer, "model": model, "region": region, "judge_errors": judge_errors,
+            "needs_human_review": review}
 
 
 def summarize(results: list) -> dict:
@@ -190,6 +269,10 @@ def main(argv=None) -> int:
             print(f"  실패 #{r['id']} [{r['category']}]: {', '.join(r['failures'])}")
     print("기준(전체 90%, guardrail 100%) 충족:", "예" if summary["meets_target"] else "아니오")
 
+    reviews = [r["needs_human_review"] for r in results if r.get("needs_human_review")]
+    print(f"사람 확인 필요: {len(reviews)}건")
+    for rv in reviews:
+        print(f"  #{rv['id']}: {rv['reason']}")
     n_err = sum(len(r["judge_errors"]) for r in results)
     print(f"판정 오류: {n_err}건")
     for r in results:
@@ -199,6 +282,7 @@ def main(argv=None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {"created_at": datetime.now().isoformat(timespec="seconds"),
                "commit": get_commit(), "judge_error_count": n_err,
+               "needs_human_review": reviews,
                "summary": summary, "results": results}
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"결과 저장: {out}")
