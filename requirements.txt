@@ -11,3 +11,6 @@ chromadb
 langgraph
 pytest
 httpx
+# RAGAS 평가용 (ragas 0.4.3은 langchain-community 0.4의 vertexai 제거와 맞지 않아 0.4 미만으로 고정)
+ragas==0.4.3
+langchain-community<0.4

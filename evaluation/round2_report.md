@@ -53,4 +53,27 @@
 - #19(진단 확정 요청 + 수치)는 D·E에서 거절 문구와 함께 공복혈당 131 질환의심 판정이 나와 통과했다.
 - 단위 테스트: `python -m pytest -q` 141개 통과 (Bedrock 호출 없음).
 - 결과 파일: `evaluation/results/rerun_haiku.json`, `rerun_sonnet.json`, `rerun_sonnet_global.json`, `rerun_sonnet46.json`, `rerun_sonnet46_fix16.json`, `rerun_sonnet46_final.json`
-- 아직 하지 않은 것: RAGAS 네 지표 측정.
+- RAGAS 네 지표는 아래 "RAGAS 측정" 절에서 따로 쟀다.
+
+## RAGAS 측정 (2026-11-12)
+- 실행: `python evaluation/run_ragas.py` (ragas 0.4.3). 원본 수치: `evaluation/results/ragas_round2.json`
+- 심판 모델: `global.anthropic.claude-sonnet-4-6` (ap-northeast-2), 서비스와 같은 모델이다. answer_relevancy용 임베딩은 `amazon.titan-embed-text-v2:0` (us-east-1)이다.
+- 모범 답안: `test_queries.csv`에 `reference` 열을 새로 만들었다. 20문항 모두 `data/criteria.json`의 구간과 `data/guides/*.md`의 지침을 근거로 썼다.
+- 통과 기준은 두지 않고 숫자만 기록한다.
+- 대상: 20문항 중 13건. `contexts`가 빈 7건(#2, #8, #11, #12, #14, #17, #18)은 계산에서 뺐다. 정상만 있는 답, 수치 없음, 기준표 밖 항목, 입력 확인, 약 요청 차단이라 지침 검색을 하지 않은 문항이다.
+
+| 지표 | 평균 | 계산 문항 수 |
+|---|---|---|
+| context_recall | 0.250 | 13 |
+| context_precision | 0.684 | 13 |
+| faithfulness | 0.232 | 13 |
+| answer_relevancy | 0.516 | 13 |
+
+해석 (점수를 올리려고 고치지 않았다):
+- faithfulness와 context_recall이 낮은 주된 이유는 측정 구조에 있다.
+  - 판정 구간과 기준 출처는 코드 판정(`criteria.json`) 결과로 답에 들어간다. 그런데 RAGAS의 `contexts`에는 지침 문서 조각만 들어간다.
+  - 그래서 "공복혈당 108은 경계(100 이상 126 미만)" 같은 문장은 contexts로 뒷받침되지 않는다고 채점된다.
+  - 모범 답안의 판정 문장도 contexts에서 찾을 수 없다.
+- #9, #10(영상·암 검진)은 네 지표 모두 0이다. 다루지 않는 검사라는 안내가 맞는 답이지만, 키워드 검색이 관련 없는 지침 조각을 contexts에 넣었기 때문이다.
+- #15는 context_precision이 0이다. 가져온 조각이 모범 답안과 맞지 않는다고 채점됐다.
+- 개선 후보(이번에는 하지 않음): 판정 근거(`criteria.json` 구간·출처)를 contexts에 함께 넣기. 다루지 않는 검사 질문에서는 지침 검색 결과를 넣지 않기.
