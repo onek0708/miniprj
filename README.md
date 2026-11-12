@@ -91,10 +91,10 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 | 최종 확인 1·2 (Haiku 예비 모델, `final_eval.json`·`final_eval_retry.json`) — **judge 도입 전 채점 기준** | 14/20 (70%), 판정 오류 11건 | 2/3 |
 | 최종 확인 3 (10단계 모델 순서, `final_eval_sonnet_order.json`, 커밋 42c6d07) — **judge 도입 전 채점 기준** | 20/20 (100%), 판정 오류 0건 | 3/3 |
 | 최종 확인 4 (LLM-as-Judge·expected_tools·진료 권고 검사 도입 후 채점, `final_eval_llm_judge.json`, 커밋 ad0a4d7) — **현재 채점 기준, 서비스 보완 전** | 14/20 (70%), 판정 오류 0건 | 3/3 |
-| 최종 확인 5 (서비스 보완 5가지·judge 문구 2개 보정 후, `final_eval_round2_fix.json`, 커밋 14e4c8f) — **현재 채점 기준** | **20/20 (100%)**, 판정 오류 0건 | **3/3** |
+| 최종 확인 5 (재작업된 ensure_summary 포함 최종 코드, `final_eval_e974e5e.json`, 커밋 e974e5e) — **현재 채점 기준** | **20/20 (100%)**, 판정 오류 0건 | **3/3** |
 
 - 평가 방법(현재): 코드 검사 — 구간 토큰(`check_traits`, `check_trace_bands`), 응답 키, 고정 면책, `expected_tools`(trace 단계에 도구 이름이 모두 있는지), 진료 권고 키워드(질환의심 판정이 있을 때), 더미 주민등록번호·전화번호, 키워드형 금지 표현. LLM-as-Judge(temperature 0, 문항당 한 번 호출) — 표현형 금지 표현과 문장 성격 `expected_traits`. judge가 위반으로 판정하면 그 문항은 실패이고, judge 호출 실패·해석 불가는 실패로 세지 않고 결과 파일의 사람 확인 필요 목록에 답변과 함께 남깁니다(이번 측정은 0건). 값별 배정 근거는 `evaluation/round2_report.md`의 "채점 배정 표"입니다.
-- 최신 결과(2026-11-12, 현재 채점 기준, 보완 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20. judge 위반 0건, 사람 확인 필요 0건. 한 번에 통과해 재실행하지 않았습니다.
+- 최신 결과(2026-11-12, 현재 채점 기준, 보완 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20. judge 위반 0건, 사람 확인 필요 0건, 남은 실패 문항 없음. 최종 코드 커밋 e974e5e에서 새로 실행한 결과(`final_eval_e974e5e.json`)이며, 재작업 전 코드(14e4c8f) 결과는 이전 기록입니다.
 - 보완 전 14/20의 실패 6문항(#1, #7, #8, #9, #11, #13)과 고친 방법: 판정 요약 한 줄을 코드가 보장(#1·#7·#8), 판정할 수 없는 질문은 고정 문장과 검진 기관 상담 권유(#9·#11), judge가 단어만 보고 오판한 두 금지 문구 보정(#11·#13, 오판 정정이며 완화가 아님). 그 밖에 temperature=0, 약 요청 감지 보강, trace 감지 문구를 고쳤습니다. 문항별 원인 표와 문구 전·후 원문은 `evaluation/round2_report.md`에 있습니다.
 - 수치 해석: 이전 20/20은 judge 도입 전 채점 기준, 14/20은 같은 서비스를 더 엄격한 현재 기준으로 잰 보완 전 값, 20/20(최신)은 서비스 보완 후 현재 기준 값입니다. 채점 기준이 다른 값끼리는 직접 비교하지 않습니다.
 - 개선폭: 1차 6/20 → judge 도입 전 기준 20/20 → 현재 기준 보완 전 14/20 → 보완 후 20/20. 측정별 자세한 내용은 `evaluation/round2_report.md`의 "추가 재측정", "LLM-as-Judge 도입", "최종 평가 결과"를 봅니다.

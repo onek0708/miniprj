@@ -5,14 +5,14 @@ GUIDE.md 6.4 형식으로 최종 상태를 먼저 정리한다. 이 요약 아�
 
 | 항목 | 내용 |
 |---|---|
-| 평가 일시, 대상 버전 | **최신(서비스 보완 후, 현재 채점 기준)**: 2026-11-12 19:09:31, 코드 커밋 `14e4c8f` (`evaluation/results/final_eval_round2_fix.json`). 보완 전 현재 채점 기준: 17:07:24, `ad0a4d7` (`final_eval_llm_judge.json`). 참고, judge 도입 전 채점 기준: 15:58:55, `42c6d07` (`final_eval_sonnet_order.json`) |
+| 평가 일시, 대상 버전 | **최신(최종 코드 커밋 기준, 현재 채점 기준)**: 2026-11-12 19:38:34, 코드 커밋 `e974e5e` (`evaluation/results/final_eval_e974e5e.json`, commit 값 `e974e5e`). 재작업 전 코드의 중간 결과(참고용, 최신 아님): 19:09:31, `14e4c8f` (`final_eval_round2_fix.json`). 보완 전 현재 채점 기준: 17:07:24, `ad0a4d7` (`final_eval_llm_judge.json`). 참고, judge 도입 전 채점 기준: 15:58:55, `42c6d07` (`final_eval_sonnet_order.json`) |
 | 전체 통과율 | **최신 20 / 20 (100%)**, 판정 오류 0건. 이전 기록은 지우지 않고 남긴다: 보완 전 현재 기준 14 / 20 (70%), judge 도입 전 기준 20 / 20 (100%). 채점 기준이 달라 judge 도입 전 값과 직접 비교하지 않는다 |
 | 카테고리별 통과율 | 최신 positive 8/8, negative 4/4, edge 5/5, guardrail 3/3. 보완 전(현재 기준) 5/8, 2/4, 4/5, 3/3. judge 도입 전 기준 8/8, 4/4, 5/5, 3/3 |
 | 실패 문항 | 최신 0건. 보완 전 6건(#1·#7 코드 검사, #8·#9·#11·#13 judge 위반)은 아래 "14/20 실패 원인과 이번 보완"에서 원인별로 고쳤다 |
 | RAGAS 네 지표 | context_recall 0.679, context_precision 0.978, faithfulness 0.455, answer_relevancy 0.412 (17건 계산, 3건 제외). 10단계 모델 순서로 바꾸기 전 설정에서 잰 값이며 이번 보완 후 다시 재지 않았다(범위 밖) |
 | 기준 충족 (전체 90%, guardrail 100%) | **현재 채점 기준에서 예** (20/20, guardrail 3/3). 보완 전 14/20은 미달이었다 |
 | 1차 대비 개선폭 | 6/20 (30%) → 20/20 (100%), **+14건 (+70%p)**. guardrail 0/3 → 3/3. 현재 채점 기준만 보면 14/20 → 20/20 (+6건) |
-| 단위 테스트 | 226개 통과 (Bedrock 호출 없음) |
+| 단위 테스트 | 233개 통과 (최종 코드 커밋 `e974e5e`에서 재실행) (Bedrock 호출 없음) |
 | 사람 확인 필요 목록 | 최신 평가 0건(`human_check_count` 0, judge 호출 실패·해석 불가 없음). judge 위반도 0건 |
 
 1차 실패 14건이 통과로 바뀐 원인 (검색 품질 / 프롬프트 정제 / 기타 원인별 수정):
@@ -525,3 +525,9 @@ judge_checkup_item('혈색소', 12.5)            -> band None, by_sex {'남': {.
 - 이 결과 파일과 리포트는 최종 코드 커밋 `e974e5e`보다 뒤의 커밋으로 남긴다. `git status --porcelain` 기준 `src/`·`tests/`·`evaluation/` 아래 미커밋 변경은 이 커밋 이후 0줄이다.
 - 보호 파일: `git diff --quiet b515caa -- data/criteria.json evaluation/test_queries.csv SERVICE.md` → 차이 없음(종료 코드 0).
 - 비밀 값 확인(최종 커밋에서 실행): `git ls-files .env` → 출력 없음, `git log --all --format=%H -- .env` → 출력 없음. `.env`와 키는 추적 파일과 이력에 없다.
+
+### 최신 결과 파일 확정 (AC 8·9 일치 기록)
+
+- 최신 결과 파일: `evaluation/results/final_eval_e974e5e.json` (콘솔 원문 `final_eval_e974e5e.log`). **commit 값 `e974e5e` = 최종 코드 커밋**이다. 평가는 `e974e5e`를 체크아웃한 깨끗한 작업 트리에서 전체를 새로 실행했다(`python -m pytest` 233 passed 후 `python evaluation/run_eval.py --out ...`).
+- 숫자: 전체 **20/20**, positive 8/8, negative 4/4, edge 5/5, guardrail **3/3**, 판정 오류 **0건**, judge 위반 0건, 사람 확인 필요 0건(`human_check_ids` 빈 목록), 남은 실패 문항 없음. 위 요약과 README의 값은 모두 이 파일과 같다.
+- 재작업 전 코드(`14e4c8f`)의 `final_eval_round2_fix.json`(20/20)은 이전 기록으로 남기되 최신 결과로 쓰지 않는다. `final_eval_ensure_summary.json`(commit 값 `fb91400`, 리포트만 바뀐 이후 커밋)도 같은 20/20이지만 commit 값이 최종 코드 커밋과 달라 최종 결과 파일로 지정하지 않는다.
