@@ -6,7 +6,7 @@
 - 문항 `test_queries.csv`는 쉽게 바꾸지 않았고 그대로다. 답 쪽 코드는 이번에 고치지 않았다.
 
 ## 결과 (`evaluation/results/round2.json`)
-- 전체 7/20 (35%), guardrail 1/3 (33%) — 1차 6/20 (30%) 대비 +1건(#18 통과)
+- 전체 7/20 (35%), guardrail 1/3 (33%) (judge 도입 전 채점 기준) — 1차 6/20 (30%) 대비 +1건(#18 통과)
 - 기준(전체 90%, guardrail 100%) 충족: 아니오
 
 ## 남은 실패와 한계
@@ -16,11 +16,11 @@
 
 ## 추가 확인 (의존성 설치 후 재측정)
 - 기존 `.venv`에 langchain·langchain-aws·chromadb·python-dotenv가 없어 모델 호출이 ImportError로 실패하고 있었다. `requirements.txt`에 의존성을 적고 설치했다. 설치 후 단건 질문("공복혈당 110")은 경계 판정·출처·지침이 정상 출력된다.
-- 재측정 결과 전체 8/20 (40%), guardrail 1/3. 남은 실패는 모두 Bedrock `ThrottlingException: Too many tokens per day`(일일 토큰 한도 소진)로 고정 안내 문구가 나온 것이다. 한도가 풀린 뒤 `python evaluation/run_eval.py --out evaluation/results/round2.json`으로 다시 재야 한다.
+- 재측정 결과(judge 도입 전 채점 기준) 전체 8/20 (40%), guardrail 1/3. 남은 실패는 모두 Bedrock `ThrottlingException: Too many tokens per day`(일일 토큰 한도 소진)로 고정 안내 문구가 나온 것이다. 한도가 풀린 뒤 `python evaluation/run_eval.py --out evaluation/results/round2.json`으로 다시 재야 한다.
 - 따라서 90%·guardrail 100% 달성은 아직 확인되지 않았다.
 
 ## 개선폭과 문항별 수정 원인 구분
-- 개선폭(고정 20문항 통과율): 1차 6/20 (30%) → 2차 7/20 (35%), +1건 (+5%p). guardrail은 0/3 → 1/3.
+- 개선폭(고정 20문항 통과율, judge 도입 전 채점 기준): 1차 6/20 (30%) → 2차 7/20 (35%), +1건 (+5%p). guardrail은 0/3 → 1/3.
 - 1차 실패 14건 중 2차에 통과로 바뀐 문항과 원인별 수정:
 
 | 문항 | 1차 → 2차 | 수정 원인 분류 | 무엇을 고쳤나 |
@@ -36,7 +36,7 @@
 - 모델: Sonnet 4.5(`us.` 추론 프로필)가 일일 토큰 한도(`Too many tokens per day`)에 걸려, 같은 계정에서 응답하는 모델로 바꿔 쟀다. 강의 고정값(Sonnet 4.5, `us-east-1`)과 다르다.
 - 문항 `test_queries.csv`와 기준표 `criteria.json`은 바꾸지 않았다.
 
-| 측정 | 모델 (리전) | 전체 | guardrail | 남은 실패의 원인 |
+| 측정 (모든 행 judge 도입 전 채점 기준) | 모델 (리전) | 전체 | guardrail | 남은 실패의 원인 |
 |---|---|---|---|---|
 | A | Haiku 4.5 `us.` (us-east-1) | 11/20 (55%) | 2/3 | 판정 도구를 부르지 않고 성별을 되물음 |
 | B | Sonnet 4.5 `us.` (us-east-1) | 11/20 (55%) | 1/3 | 7건이 일일 토큰 한도로 고정 안내 문구 |
@@ -161,7 +161,7 @@
 분류: 기타 원인별 수정(실행 환경·모델). 검색 설정(k=3, 같은 비중 RRF)·프롬프트·판정 코드·문항·채점 기준은 바꾸지 않았다.
 
 ### 이전 실행의 최종 평가 실패 (Haiku 예비 모델)
-- `evaluation/results/final_eval.json`(15:18)과 `final_eval_retry.json`(15:21)이 모두 **14/20, guardrail 2/3, 판정 오류 11건**이었다. 두 번 다 같은 결과였고 둘 다 커밋 c896640 기준이다.
+- `evaluation/results/final_eval.json`(15:18)과 `final_eval_retry.json`(15:21)이 모두 **14/20, guardrail 2/3, 판정 오류 11건**(judge 도입 전 채점 기준)이었다. 두 번 다 같은 결과였고 둘 다 커밋 c896640 기준이다.
 - 원인: 서비스 주 모델이 한도에 걸려 대부분 문항을 Haiku 4.5 예비 모델이 답했다(final_eval 19문항, final_eval_retry 18문항, 나머지는 모델 호출 없는 문항 또는 Sonnet 4.6 1문항). Haiku는 판정 도구를 부르지 않고 답해, 실패 문항 #2, #3, #4, #7, #16, #20의 trace에 판정이 비어 있었다(`trace=[]`). 그래서 "구간 누락"과 "판정 오류"가 함께 났다. 가드레일 실패 1건은 이 결과 파일에서 #20이다.
 - 조치: Haiku 예비 모델 방식은 되돌린 시도로 기록하고 없앴다. Haiku 4.5, Nova, gpt-oss는 쓰지 않는다. 서비스(`src/agent.py`)와 RAGAS 심판(`evaluation/run_ragas.py`)은 같은 10단계 (리전, 모델 ID) 순서를 쓴다: Sonnet 4.6 5개(us-west-2 us·global, us-east-1 us·global, ap-northeast-2 global) → Sonnet 4.5 5개(같은 리전 순서). 서비스는 질문 단위, RAGAS는 회차 단위로 한도(ThrottlingException)에 걸리면 다음 차수로 처음부터 다시 처리한다. 한도에 걸린 차수는 같은 프로세스에서 다음 질문부터 건너뛴다. 이 설정은 위 "모델 설정 변경 사실과 이유"의 Haiku 예비 모델 설정을 대체한다.
 
@@ -289,13 +289,13 @@
 
 - 평가 일시: 2026-11-12T17:07:24 (결과 파일 `created_at`)
 - 평가한 코드 커밋: ad0a4d7 (채점 구현 커밋. 결과 파일의 commit 값과 같다. 결과·리포트는 그 다음 커밋)
-- 전체 14/20 (70%), 판정 오류 0건
+- 전체 14/20 (70%, judge 도입 후 채점 기준), 판정 오류 0건
 - 카테고리별: positive 5/8 (62%), negative 2/4 (50%), edge 4/5 (80%), guardrail 3/3 (100%)
 - 기준(전체 90%, guardrail 100%) 충족 여부: **아니오** (guardrail은 100%이나 전체가 70%)
 - judge 위반 수: 5건 (#8, #9, #11, #13 및 #11의 두 번째 기준; 문항 기준으로 4문항, 기준 기준으로 5건)
 - 사람 확인 필요(judge 호출 실패·해석 불가): 0건
 - judge 모델: `us.anthropic.claude-sonnet-4-6` 또는 `global.anthropic.claude-sonnet-4-6` / `us-west-2` (문항별로 결과 파일에 기록)
-- 20/20이 아니므로 서비스(`src/`)·프롬프트·문항·기준·채점 기준을 고치지 않았고 재실행하지 않았다. 여기서 멈추고 사용자에게 알린다.
+- 현재(judge 도입 후) 채점 기준에서 20/20이 아니므로 서비스(`src/`)·프롬프트·문항·기준·채점 기준을 고치지 않았고 재실행하지 않았다. 여기서 멈추고 사용자에게 알린다.
 
 #### 실패 문항 (실제 답은 결과 파일 `results[].answer`에 전문이 있고, 아래는 요지)
 
