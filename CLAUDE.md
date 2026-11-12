@@ -57,17 +57,37 @@ These guidelines are working if: fewer unnecessary changes in diffs, fewer rewri
 # 작업 규칙
 
 - 무엇을 만드는지는 SERVICE.md가 기준이다. 애매하면 추측하지 말고 물어본다.
-
 - 스택: Python, LangGraph, Bedrock (anthropic.claude-3-5-sonnet-20241022-v2:0) -> 필요 시 모델은 조정해서 사용하거나 복수의 모델을 상황에 맞춰 변경하여 중단없이 쓸 수 있게 한다.
-
 - 괜찮은 레퍼런스 코드를 깃허브에서 찾아서 레퍼런스로 삼거나 (있을 경우) 현재 ref 폴더 내 코드를 참조한다. 절대 사용자의 허락없이 신규 프레임워크 또는 라이브러리를 들이지 않는다.
-
 - 한 번에 TASKS.md의 작업 하나만 한다.
-
 - 계산, 규칙 판정은 LLM이 아니라 파이썬 코드로 하는 원칙으로 진행한다. 필요시 LLM 판정부분을 덧붙여 추가한다.
-
 - API 키는 .env에서 읽는다.
-
 - Seed 실행은 반드시 Ouroboros(`/ooo run`, `ouroboros_start_execute_seed`)로 한다. Claude가 Seed 내용을 보고 직접 구현·실행하지 않는다. 사용자가 "Seed 실행", "Run Seed"라고 하면 Ouroboros 실행을 뜻한다.
-
 - 사용자가 정한 방법(도구, 실행 방식, 순서)을 Claude가 임의로 바꾸지 않는다. 다른 방법이 낫다고 판단되면 실행 전에 먼저 묻고, 허락을 받은 뒤에만 바꾼다.
+
+# 프로젝트 규칙
+
+## 기술 스택
+- Python, LangChain, LangGraph
+- 모델은 Amazon Bedrock (ChatBedrockConverse)
+- Agent 생성은 langchain.agents 의 create_agent 를 쓴다
+
+## 폴더 구조 (제출 규약. 바꾸지 않는다)
+src/agent.py       메인 에이전트 그래프
+src/tools.py       도메인 도구
+src/retriever.py   RAG 파이프라인
+data/              사용한 문서와 데이터
+evaluation/        test_queries.csv 와 평가 리포트
+
+## 주고받는 형식 (제출 규약)
+- POST /query 로 받고 question 필드를 읽는다
+- 답은 answer, contexts, trace 세 키로 돌려준다
+
+## 코드 규칙
+- 파일 하나에 한 가지 역할만 둔다
+- 함수와 도구에는 한국어 docstring 을 쓴다
+- 비밀 값은 .env 에서 읽고 코드에 적지 않는다
+
+## 하지 말 것
+- 요청하지 않은 파일을 새로 만들지 않는다
+- 기존 파일을 통째로 다시 쓰지 않는다. 바뀐 부분만 고친다
