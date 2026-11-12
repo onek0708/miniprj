@@ -89,3 +89,18 @@ def test_호출실패는_재시도_후_성공하거나_판정불가():
 
 def test_temperature_0():
     assert "temperature=0" in inspect.getsource(llm_judge.make_model)
+
+
+def test_self_check_일치_규칙():
+    """위반 샘플은 대상 기준 위반, 올바른 샘플은 전부 충족, 호출 실패·해석 불가는 불일치다."""
+    from evaluation import llm_judge as lj
+    viol = next(c for c in lj.SELF_CHECK_CASES if c["set"] == "violation")
+    ok = next(c for c in lj.SELF_CHECK_CASES if c["set"] == "correct")
+    lab_v, lab_c = viol["target_criterion_label"], ok["criteria_labels"][0]
+    mk = lambda lab, v: {"status": lj.STATUS_OK, "verdicts": [{"criterion": lab, "verdict": v, "reason": ""}]}
+    assert lj.is_match(viol, mk(lab_v, lj.VIOLATION)) and not lj.is_match(viol, mk(lab_v, lj.PASS))
+    assert lj.is_match(ok, mk(lab_c, lj.PASS)) and not lj.is_match(ok, mk(lab_c, lj.VIOLATION))
+    bad = {"status": lj.STATUS_UNJUDGEABLE, "verdicts": []}
+    assert not lj.is_match(viol, bad) and not lj.is_match(ok, bad)
+    assert len([c for c in lj.SELF_CHECK_CASES if c["set"] == "violation"]) == 5
+    assert len([c for c in lj.SELF_CHECK_CASES if c["set"] == "correct"]) == 3
