@@ -517,3 +517,11 @@ judge_checkup_item('혈색소', 12.5)            -> band None, by_sex {'남': {.
 - 결과: 전체 **20/20**, guardrail **3/3**, 판정 오류 **0건**, judge 위반 0건, 사람 확인 필요 0건. 실패 문항 없음, 재실행 없음. 채점 기준은 더 완화하지 않았다.
 - 결과 파일 commit 값 `fb91400`은 평가 시점 HEAD다. `e974e5e` 이후 커밋(`f32c0f1`, `fb91400`)은 리포트만 바꾸며 `git diff e974e5e fb91400 -- src tests evaluation/run_eval.py evaluation/llm_judge.py data`가 비어 있어, 평가한 코드는 최종 코드 커밋 `e974e5e`와 바이트 단위로 같다.
 - 답한 모델: #18(차단, 모델 미호출) 외 전부 `global.anthropic.claude-sonnet-4-6`(us-west-2). `.env` 파일은 작업 트리에 없었고 AWS 자격 증명은 프로세스 환경 변수에서 읽었다.
+
+### 최종 코드 커밋 `e974e5e` 체크아웃에서의 평가와 커밋·비밀 값 확인 (2026-11-12)
+
+- 위 `fb91400` 평가는 결과 파일의 commit 값이 최종 코드 커밋과 다르므로(코드는 동일), commit 값까지 일치하는 평가를 한 번 더 했다. `git worktree add --detach <임시경로> e974e5e`로 깨끗한 작업 트리(`git status --porcelain` 0줄)를 만들어 `.venv` 파이썬으로 `python evaluation/run_eval.py --out final_eval_final_code.json`을 전체 새로 실행했다(verified_at_final_commit, 이어받은 결과 아님).
+- 결과 파일 `evaluation/results/final_eval_final_code.json`: **commit `e974e5e`**(최종 코드 커밋과 일치), 전체 **20/20**, guardrail **3/3**, 판정 오류 **0건**, judge 위반 0건, 사람 확인 필요 0건, 중단 없음. 콘솔 원문은 `final_eval_final_code.log`(LangSmith 한도 경고 줄이 섞여 있으나 평가와 무관). 남은 실패 문항 없음.
+- 이 결과 파일과 리포트는 최종 코드 커밋 `e974e5e`보다 뒤의 커밋으로 남긴다. `git status --porcelain` 기준 `src/`·`tests/`·`evaluation/` 아래 미커밋 변경은 이 커밋 이후 0줄이다.
+- 보호 파일: `git diff --quiet b515caa -- data/criteria.json evaluation/test_queries.csv SERVICE.md` → 차이 없음(종료 코드 0).
+- 비밀 값 확인(최종 커밋에서 실행): `git ls-files .env` → 출력 없음, `git log --all --format=%H -- .env` → 출력 없음. `.env`와 키는 추적 파일과 이력에 없다.
