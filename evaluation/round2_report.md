@@ -42,7 +42,7 @@
 | B | Sonnet 4.5 `us.` (us-east-1) | 11/20 (55%) | 1/3 | 7건이 일일 토큰 한도로 고정 안내 문구 |
 | C | Sonnet 4.5 `global.` (us-east-1) | 17/20 (85%) | 3/3 | #4, #7, #16 구간 누락 |
 | D | Sonnet 4.6 `global.` (ap-northeast-2) | 19/20 (95%) | 3/3 | #16 성별 미입력 허리둘레에서 성별을 되물음 |
-| E | Sonnet 4.6 `global.` (ap-northeast-2) + 아래 수정 2건 | **20/20 (100%)** | **3/3** | 없음 |
+| E | Sonnet 4.6 `global.` (ap-northeast-2) + 아래 수정 2건 | **20/20 (100%, judge 도입 전 채점 기준)** | **3/3** | 없음 |
 
 ### E에서 고친 것 (원인별 분류)
 | 문항 | D → E | 분류 | 무엇을 고쳤나 |
@@ -86,7 +86,7 @@
 | 답의 판정 문장("108은 경계")은 코드 판정에서 나오는데 RAGAS 근거에는 지침 조각만 있음 | 측정 방식 | `run_ragas.py`가 `trace`의 판정 결과·계산값과 해당 항목의 판정 기준(`criteria.json` 구간·출처)을 RAGAS 근거에 더한다. 서비스 응답의 `contexts`는 GUIDE.md 정의(지침 검색 결과)대로 둔다. |
 | 다루지 않는 검사(#9 갑상선, #10 위암)에 관계없는 혈압·혈당 지침이 붙음 | 검색 정확도 | `src/agent.py`의 `ensure_evidence`에 주제 필터를 넣었다. 지침 문서마다 주제 단어를 두고, 질문이나 판정 항목과 주제가 맞는 조각만 남긴다. 주제를 알 수 없는 질문은 보충 검색을 하지 않는다. |
 
-- 회귀 확인: 단위 테스트 143개 통과(필터 테스트 2개 추가), 인-아웃 세트 20/20, guardrail 3/3 (`evaluation/results/rerun_relevance_filter.json`)
+- 회귀 확인: 단위 테스트 143개 통과(필터 테스트 2개 추가), 인-아웃 세트 20/20(judge 도입 전 채점 기준), guardrail 3/3 (`evaluation/results/rerun_relevance_filter.json`)
 - 대상: 20문항 중 17건. 제외 3건(#9, #11, #18)은 근거가 하나도 없는 문항이다(다루지 않는 검사, 수치 없음, 약 요청 차단). #2, #8, #14, #17은 판정 근거가 생겨 새로 계산에 들어갔다.
 
 | 지표 | 개선 전 (13건) | 개선 후 (17건) | 같은 12건 비교 (전 → 후) |
@@ -168,7 +168,7 @@
 ### 최종 확인 결과 (`evaluation/results/final_eval_sonnet_order.json`)
 - 평가 일시: 2026-11-12T15:58:55
 - 평가한 코드 커밋: 42c6d07 (모델 순서 적용 커밋. 코드 커밋 후 평가했고 결과·리포트는 그 다음 커밋)
-- 전체 20/20 (100%), 판정 오류 0건 (CSV 토큰을 정답으로 trace 판정과 answer 구간 표기를 모두 대조)
+- 전체 20/20 (100%, judge 도입 전 채점 기준), 판정 오류 0건 (CSV 토큰을 정답으로 trace 판정과 answer 구간 표기를 모두 대조)
 - 카테고리별: positive 8/8, negative 4/4, edge 5/5, guardrail 3/3 (각 100%)
 - 실패 문항: 없음 (실제 답과 실패 원인 기록할 항목 없음). 한 번에 통과해 재실행하지 않았다.
 - 문항별 답한 모델과 리전: #1~#17, #19, #20은 모두 `global.anthropic.claude-sonnet-4-6` / `us-west-2`(결과 파일에는 답한 차수만 기록됨). #18(guardrail)은 모델 호출 없이 답해 모델·리전이 비어 있다.
@@ -317,3 +317,25 @@
 - 이전에 한계로 적었던 "LLM-as-Judge 미구현"은 해소됐다. `evaluation/llm_judge.py`가 표현형 forbidden과 문장 성격 expected_traits를 판정하고, `run_eval.py`가 expected_tools·진료 권고 코드 검사와 함께 쓴다. 단위 테스트는 가짜 모델로 하고, 실제 Bedrock 점검은 `--self-check` 8/8이다.
 - 남은 한계: judge도 모델 판단이라 문항 의도보다 엄격할 수 있다(#8). 현재 채점 기준 실패 6문항(#1, #7, #8, #9, #11, #13)은 서비스 쪽 원인 수정을 하지 않았다. 코드 검사 실패 #1·#7의 실행 간 변동 원인도 확정하지 못했다.
 - 이전 20/20(커밋 42c6d07)은 judge 도입 전 채점 기준의 결과이고, 현재 채점 기준의 결과는 14/20(70%, guardrail 3/3)이다. 두 값은 채점 기준이 달라 직접 비교하지 않는다. 기준(전체 90%) 충족 여부: 현재 기준 미충족.
+
+### 최종 경계 확인 기록 (관찰)
+
+앞 세대의 PASS나 `--skip-completed` 상태를 근거로 삼지 않고, 이 기록을 쓰는 시점(2026-11-12, 베이스 HEAD `e4312cd1c5d275f218733108efc4b4309c83ca63`)에 아래 명령을 실제로 실행해 출력을 그대로 옮겼다. 검증 상태: 관찰(observed).
+
+| # | 명령 | 출력(원문) | 종료 코드 | 기대 | 결과 |
+|---|---|---|---|---|---|
+| 1 | `git log -1 --format=%H -- evaluation/run_eval.py evaluation/llm_judge.py` | `ad0a4d76ea9fe54fe672d7fc6992bbcfa4ecc4a9` | 0 | 채점 코드 커밋 | 관찰 |
+| 2 | 결과 파일 `final_eval_llm_judge.json`의 `commit` 값 읽기(`created_at`: 2026-11-12T17:07:24) | `ad0a4d7` | 0 | 1번의 앞 7자리와 같다 | 같음 |
+| 3 | `git merge-base --is-ancestor ad0a4d7 HEAD` | (출력 없음) | 0 | 0 | 통과 |
+| 4 | `git diff --name-only ad0a4d7 HEAD` | `README.md`, `evaluation/results/final_eval_llm_judge.json`, `evaluation/round2_report.md` | 0 | 문서·결과 외 변경 없음 | 통과 |
+| 5 | `git diff --quiet ad0a4d7 HEAD -- 'evaluation/*.py' src` | (출력 없음) | 0 | 0 | 통과 |
+| 6 | `git diff --quiet 7a35225 -- data/criteria.json evaluation/test_queries.csv SERVICE.md src` | (출력 없음) | 0 | 0 | 통과 |
+| 7 | `git ls-files .env` | (출력 없음) | 0 | 빈 출력 | 통과 |
+| 8 | `git log --all --format=%H -- .env` | (출력 없음) | 0 | 빈 출력 | 통과 |
+| 9 | `git status --porcelain` (README·리포트 수정 전) | (출력 없음, 깨끗함) | 0 | 빈 출력 | 통과 |
+
+- 결과 커밋 ad0a4d7 = 채점 코드 커밋 ad0a4d7이다. 결과 파일 커밋(140db54)과 리포트 커밋은 그 뒤 커밋이며 문서·결과 파일만 바꿨다(4·5번).
+- 이 작업 폴더(워크트리)에는 `HANDOFF_2026-11-12.md`가 없었다. 작업 범위 밖 파일이므로 만들거나 고치지 않았다. 있다면 `git status`에 남는 것은 허용한다.
+- 20/20 표기 점검: README·리포트의 모든 `20/20`에 같은 문장·같은 행에서 judge 도입 전 채점 기준임을 표시했다(`grep -n "20/20"`로 확인, 이번 기록에서 표시가 빠진 4곳 보완). 현재 채점 기준(judge 도입 후) 수치는 14/20(70%), guardrail 3/3이다.
+- 수치 출처: README 통과율 표와 이 리포트의 14/20은 모두 `final_eval_llm_judge.json`(커밋 ad0a4d7, judge 도입 후)에서 나왔고, 20/20은 `final_eval_sonnet_order.json`(커밋 42c6d07, judge 도입 전) 등 이전 결과 파일에서 나왔다.
+- 위 관찰 후 이 기록을 쓰는 커밋은 README·리포트만 바꾸는 문서 전용 커밋이다.

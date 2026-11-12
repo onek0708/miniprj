@@ -87,7 +87,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 |---|---|---|
 | 1차 | 6/20 (30%) | 0/3 |
 | 2차 | 7/20 (35%) → 의존성 설치 후 재측정 8/20 (40%) | 1/3 |
-| 2차 재측정 (자격 증명 보완, Sonnet 4.6, #16 수정) | 20/20 (100%) | 3/3 |
+| 2차 재측정 (자격 증명 보완, Sonnet 4.6, #16 수정) — **judge 도입 전 채점 기준** | 20/20 (100%) | 3/3 |
 | 최종 확인 1·2 (Haiku 예비 모델, `final_eval.json`·`final_eval_retry.json`) | 14/20 (70%), 판정 오류 11건 | 2/3 |
 | 최종 확인 3 (10단계 모델 순서, `final_eval_sonnet_order.json`, 커밋 42c6d07) — **judge 도입 전 채점 기준** | 20/20 (100%), 판정 오류 0건 | 3/3 |
 | 최종 확인 4 (LLM-as-Judge·expected_tools·진료 권고 검사 도입 후 채점, `final_eval_llm_judge.json`, 커밋 ad0a4d7) — **현재 채점 기준** | **14/20 (70%)**, 판정 오류 0건 | **3/3** |
