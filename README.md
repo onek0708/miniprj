@@ -101,6 +101,12 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 - 실패한 접근 4 — 성능이 낮은 모델로 바꾸기: 한도를 피하려고 Haiku 4.5로 바꿨더니 판정 도구를 부르지 않고 성별을 되물어 11/20에 그쳤습니다. Sonnet 계열의 다른 추론 프로필·리전(Sonnet 4.6, 서울)으로 바꿔 해결했습니다.
 - 남은 한계: 강의 고정 모델(Sonnet 4.5)로는 20문항을 끝까지 재지 못했습니다. RAGAS faithfulness(0.455)와 answer_relevancy(0.412)는 아직 낮고, answer_relevancy는 실행마다 답 문장이 달라져 편차가 큽니다. 검색 설정(k, 키워드·벡터 비중)은 아직 RAGAS로 비교해 고르지 않았습니다.
 
+## 7-1. 2차 개선 1단계: 검색 설정 비교와 모델 설정 변경
+- 고른 검색 설정: k=3, 같은 비중 RRF 1/(60+순위) 유지(코드 변경 없음). 수치 목표는 두지 않았다.
+- 비교 결과 요약(context_recall·context_precision 평균, 11문항, 조합마다 2회, Sonnet 4.6 채점): k=2 0.5303, k=3(기준선) 0.5183, k=5 0.5450, 키워드 0.7:벡터 0.3 0.5057. 키워드 0.3:벡터 0.7은 2회차를 예비 모델이 채점해 직접 비교가 불가해 채택하지 않았다. k=5와의 차이(0.0267)는 2회 편차(0.0289) 안이라 기준선을 유지했다. 자세한 표와 한계는 `evaluation/round2_report.md`.
+- 측정 방법: 기준 설정으로 서비스를 한 번만 돌려 저장한 검색 질문문으로 검색 함수만 다시 실행해 검색 지표 두 개만 쟀다(답변 재생성 제거, 호출량 감소).
+- 모델 설정 변경: 서비스와 RAGAS 심판 모두 `us-west-2`, 주 모델 `us.anthropic.claude-sonnet-4-6`, 예비 모델 `us.anthropic.claude-haiku-4-5-20251001-v1:0`. 이유는 기존 서울 리전 global 모델과 us-east-1이 Bedrock 일일 토큰 한도에 걸려 측정이 중단됐기 때문이며, 주 모델이 한도에 걸리면 예비 모델로 넘어가 중단 없이 진행한다(서비스는 질문 단위, RAGAS는 회차 단위).
+
 ## 8. 핵심 코드 위치
 - `src/agent.py`: `run_query`(진입·면책), 출력 가드(`ensure_band_consistency`, `ensure_evidence`, `ensure_referral`, `ensure_assumptions`), `_build_tools`
 - `src/tools.py`: `judge_checkup_item`, `judge_blood_pressure`, `calc_bmi`

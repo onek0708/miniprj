@@ -2,7 +2,7 @@
 
 사용법: python evaluation/run_ragas.py [--out 경로]
 - 지표: context_recall, context_precision, faithfulness, answer_relevancy (측정만, 통과 기준 없음)
-- 심판 모델: 서비스와 같은 Sonnet 4.6(ap-northeast-2), 임베딩: Titan v2(us-east-1)
+- 심판 모델: us-west-2의 Sonnet 4.6(주) → 한도 시 회차를 Haiku 4.5(예비)로 처음부터 다시 채점, 임베딩: Titan v2(us-east-1)
 - contexts가 빈 문항(차단, 없는 정보, 정상만 있는 답 등)은 계산에서 빼고 그 수를 기록한다
 """
 import argparse
@@ -22,8 +22,9 @@ load_dotenv(ROOT / ".env")
 from src.agent import run_query  # noqa: E402
 
 CSV_PATH = ROOT / "evaluation" / "test_queries.csv"
-JUDGE_MODEL = "global.anthropic.claude-sonnet-4-6"
-JUDGE_REGION = "ap-northeast-2"
+JUDGE_MODEL = "us.anthropic.claude-sonnet-4-6"
+JUDGE_FALLBACK_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+JUDGE_REGION = "us-west-2"
 EMBED_MODEL = "amazon.titan-embed-text-v2:0"
 EMBED_REGION = "us-east-1"
 METRIC_NAMES = ["context_recall", "context_precision", "faithfulness", "answer_relevancy"]
@@ -101,8 +102,37 @@ def collect_samples(rows: list) -> tuple[list, list]:
     return samples, excluded
 
 
-def score(samples: list) -> list:
-    """RAGAS 4개 지표를 계산해 문항별 점수 목록을 돌려준다."""
+def collect_queries(rows: list, out: Path) -> dict:
+    """기준 설정으로 서비스를 한 번만 돌려 문항별 검색 질문문(retrieve_guides 단계 입력)을 JSON으로 저장한다.
+
+    retrieve_guides를 한 번도 부르지 않은 문항은 비교에서 빼고 id를 기록한다.
+    """
+    queries, excluded = {}, []
+    for row in rows:
+        res = run_query(row["input"])
+        qs = [t["input"] for t in res.get("trace", []) if t.get("step") == "retrieve_guides" and t.get("input")]
+        if qs:
+            queries[row["id"]] = qs
+        else:
+            excluded.append(row["id"])
+        print(f"[질문문 수집] #{row['id']} 검색 {len(qs)}회", flush=True)
+    payload = {"created_at": datetime.now().isoformat(timespec="seconds"),
+               "baseline": {"k": 3, "rrf_weights": "keyword 1 : vector 1, 1/(60+순위)"},
+               "total_questions": len(rows), "excluded_ids": excluded, "queries": queries}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"질문문 저장: {out} (제외 문항 {excluded})", flush=True)
+    return payload
+
+
+def _is_throttling(exc: BaseException) -> bool:
+    """Bedrock 한도(ThrottlingException) 오류인지 확인한다."""
+    code = getattr(exc, "response", {}).get("Error", {}).get("Code", "") if hasattr(exc, "response") else ""
+    return "ThrottlingException" in (code, type(exc).__name__) or "ThrottlingException" in str(exc)
+
+
+def score(samples: list, model_id: str = JUDGE_MODEL, retrieval_only: bool = False) -> list:
+    """RAGAS 지표를 계산해 문항별 점수 목록을 돌려준다(retrieval_only면 검색 지표 둘만). 한도에 걸리면 ThrottlingException을 낸다."""
     from langchain_aws import BedrockEmbeddings, ChatBedrockConverse
     from ragas import EvaluationDataset, RunConfig, evaluate
     from ragas.embeddings import LangchainEmbeddingsWrapper
@@ -110,14 +140,115 @@ def score(samples: list) -> list:
     from ragas.metrics import (Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall,
                                ResponseRelevancy)
 
-    llm = LangchainLLMWrapper(ChatBedrockConverse(model=JUDGE_MODEL, region_name=JUDGE_REGION, temperature=0))
+    throttled: list = []
+
+    class _FlagChat(ChatBedrockConverse):
+        """ragas는 호출 오류를 NaN으로 삼키므로, 한도 오류를 따로 기록해 회차 끝에 다시 낸다."""
+
+        def _generate(self, *a, **kw):
+            try:
+                return super()._generate(*a, **kw)
+            except Exception as exc:
+                if _is_throttling(exc):
+                    throttled.append(exc)
+                raise
+
+        async def _agenerate(self, *a, **kw):
+            try:
+                return await super()._agenerate(*a, **kw)
+            except Exception as exc:
+                if _is_throttling(exc):
+                    throttled.append(exc)
+                raise
+
+    llm = LangchainLLMWrapper(_FlagChat(model=model_id, region_name=JUDGE_REGION, temperature=0))
     emb = LangchainEmbeddingsWrapper(BedrockEmbeddings(model_id=EMBED_MODEL, region_name=EMBED_REGION))
     dataset = EvaluationDataset.from_list(
         [{k: s[k] for k in ("user_input", "response", "retrieved_contexts", "reference")} for s in samples])
-    metrics = [LLMContextRecall(), LLMContextPrecisionWithReference(), Faithfulness(), ResponseRelevancy()]
+    metrics = [LLMContextRecall(), LLMContextPrecisionWithReference()]
+    if not retrieval_only:
+        metrics += [Faithfulness(), ResponseRelevancy()]
     result = evaluate(dataset, metrics=metrics, llm=llm, embeddings=emb,
                       run_config=RunConfig(max_workers=4, timeout=180), show_progress=False)
+    if throttled:
+        raise throttled[0]
     return result.to_pandas().to_dict("records")
+
+
+def build_retrieval_samples(rows: list, queries_path: Path, k: int, keyword_weight: float,
+                            vector_weight: float, retriever=None, judge_model: str = JUDGE_MODEL) -> tuple[list, list]:
+    """저장된 검색 질문문으로 검색 함수만 다시 실행해 RAGAS 표본을 만든다(서비스·답변 생성 없음).
+
+    한 문항의 여러 질문문 결과는 doc_id 기준으로 중복 없이 합친다. 질문문이 없는 문항은 빼고 id를 돌려준다.
+    retrieved_contexts에는 검색된 지침 조각만 넣는다.
+    """
+    if retriever is None:
+        from src.retriever import retrieve_guides as retriever
+    saved = json.loads(Path(queries_path).read_text(encoding="utf-8"))["queries"]
+    samples, excluded = [], []
+    for row in rows:
+        qs = saved.get(row["id"])
+        if not qs:
+            excluded.append(row["id"])
+            print(f"[검색 재실행] #{row['id']} 질문문 없음 → 제외 (채점 모델 {judge_model})", flush=True)
+            continue
+        merged: dict = {}
+        for q in qs:
+            chunks, _ = retriever(q, k, keyword_weight, vector_weight)
+            for c in chunks:
+                merged.setdefault(c["doc_id"], c)
+        print(f"[검색 재실행] #{row['id']} 질문문 {len(qs)}개 → 근거 {len(merged)}개 "
+              f"(k={k}, 키워드 {keyword_weight}:벡터 {vector_weight}, 채점 모델 {judge_model})", flush=True)
+        if not merged:
+            excluded.append(row["id"])
+            continue
+        samples.append({"id": row["id"], "user_input": row["input"], "response": "",
+                        "retrieved_contexts": [c["text"] for c in merged.values()],
+                        "reference": row["reference"], "doc_ids": list(merged)})
+    return samples, excluded
+
+
+def run_retrieval_round(rows: list, queries_path: Path, k: int, keyword_weight: float, vector_weight: float,
+                        scorer=None, retriever=None) -> dict:
+    """한 설정을 한 회차 재서 context_recall·context_precision만 돌려준다. NaN 문항이 있으면 회차를 무효로 표시한다."""
+    samples, excluded = build_retrieval_samples(rows, queries_path, k, keyword_weight, vector_weight, retriever)
+    base = scorer or (lambda s, m: score(s, m, retrieval_only=True))
+    records, judge_model = score_round(samples, base) if samples else ([], JUDGE_MODEL)
+    alias = {"context_recall": "context_recall", "llm_context_precision_with_reference": "context_precision"}
+    per_question = []
+    for s, rec in zip(samples, records):
+        row = {"id": s["id"], **{alias[a]: rec.get(a) for a in alias}}
+        per_question.append(row)
+        print(f"[채점] #{s['id']} recall={row['context_recall']} precision={row['context_precision']} "
+              f"(채점 모델 {judge_model})", flush=True)
+    summary, nan_ids = {}, []
+    for name in ("context_recall", "context_precision"):
+        summary[name] = dict(zip(("mean", "scored"), _mean([q.get(name) for q in per_question])))
+    for q in per_question:
+        if any(not isinstance(q.get(n), (int, float)) or math.isnan(q.get(n)) for n in alias.values()):
+            nan_ids.append(q["id"])
+    means = [summary[n]["mean"] for n in summary]
+    return {"k": k, "keyword_weight": keyword_weight, "vector_weight": vector_weight,
+            "judge_model": f"{judge_model} ({JUDGE_REGION})", "evaluated": len(samples),
+            "excluded_ids": excluded, "metrics": summary, "nan_ids": nan_ids, "valid": not nan_ids and bool(samples),
+            "selection_score": round(sum(means) / 2, 4) if not nan_ids and None not in means else None,
+            "per_question": per_question}
+
+
+def score_round(samples: list, scorer=None) -> tuple[list, str]:
+    """한 회차를 한 모델로만 채점한다. 주 모델이 한도에 걸리면 그 회차를 예비 모델로 처음부터 다시 채점한다.
+
+    돌려주는 값은 (문항별 점수, 채점 모델 ID)이며, 예비 모델로 넘어가면 주 모델 결과는 버린다.
+    두 모델 모두 한도에 걸리면 예외를 그대로 올려 호출자가 멈추게 한다.
+    """
+    scorer = scorer or score
+    try:
+        return scorer(samples, JUDGE_MODEL), JUDGE_MODEL
+    except Exception as exc:
+        if not _is_throttling(exc):
+            raise
+        print(f"[채점 모델] 주 모델 한도 → 예비 모델 {JUDGE_FALLBACK_MODEL}로 회차를 처음부터 다시 채점", flush=True)
+        return scorer(samples, JUDGE_FALLBACK_MODEL), JUDGE_FALLBACK_MODEL
 
 
 def _mean(values: list):
@@ -129,12 +260,30 @@ def _mean(values: list):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="RAGAS 4개 지표를 측정해 저장한다")
     parser.add_argument("--out", default=str(ROOT / "evaluation" / "results" / "ragas_round2.json"))
+    parser.add_argument("--collect-queries", metavar="경로", help="기준 설정으로 서비스를 한 번 돌려 검색 질문문만 JSON으로 저장하고 끝낸다")
+    parser.add_argument("--retrieval-from", metavar="경로", help="저장된 검색 질문문으로 검색 함수만 다시 실행해 context_recall·context_precision만 잰다")
+    parser.add_argument("--k", type=int, default=3, help="검색 조각 수 (--retrieval-from과 함께)")
+    parser.add_argument("--keyword-weight", type=float, default=1.0, help="키워드 RRF 비중")
+    parser.add_argument("--vector-weight", type=float, default=1.0, help="벡터 RRF 비중")
     args = parser.parse_args(argv)
 
     with open(CSV_PATH, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
+    if args.retrieval_from:
+        result = run_retrieval_round(rows, Path(args.retrieval_from), args.k, args.keyword_weight, args.vector_weight)
+        print(f"[요약] 채점 모델 {result['judge_model']} 유효={result['valid']} {result['metrics']}", flush=True)
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"created_at": datetime.now().isoformat(timespec="seconds"), **result},
+                                  ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        print(f"결과 저장: {out}", flush=True)
+        return 0
+    if args.collect_queries:
+        collect_queries(rows, Path(args.collect_queries))
+        return 0
     samples, excluded = collect_samples(rows)
-    records = score(samples) if samples else []
+    records, judge_model = score_round(samples) if samples else ([], JUDGE_MODEL)
+    print(f"[채점 모델] {judge_model} ({JUDGE_REGION})", flush=True)
 
     # ragas 결과 열 이름(llm_context_precision_with_reference, answer_relevancy 등)을 제출 지표 이름으로 맞춘다
     alias = {"context_recall": "context_recall", "llm_context_precision_with_reference": "context_precision",
@@ -155,7 +304,7 @@ def main(argv=None) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {"created_at": datetime.now().isoformat(timespec="seconds"),
-               "judge_model": f"{JUDGE_MODEL} ({JUDGE_REGION})", "embedding_model": f"{EMBED_MODEL} ({EMBED_REGION})",
+               "judge_model": f"{judge_model} ({JUDGE_REGION})", "embedding_model": f"{EMBED_MODEL} ({EMBED_REGION})",
                "total_questions": len(rows), "evaluated": len(samples),
                "excluded_empty_contexts": len(excluded), "excluded_ids": excluded,
                "metrics": summary, "per_question": per_question}

@@ -10,6 +10,10 @@ from typing import Optional
 GUIDES_DIR = Path(__file__).resolve().parent.parent / "data" / "guides"
 EMBED_MODEL = "amazon.titan-embed-text-v2:0"
 REGION = "us-east-1"
+# 고른 검색 설정의 기본값 (인자를 주지 않으면 이 값을 쓴다). 비교 결과는 evaluation/round2_report.md 참고.
+DEFAULT_K = 3
+DEFAULT_KEYWORD_WEIGHT = 1.0
+DEFAULT_VECTOR_WEIGHT = 1.0
 _chunks_cache: Optional[list] = None
 _vector_store = None
 
@@ -92,26 +96,32 @@ def vector_search(query: str, k: int = 4) -> list[dict]:
     return [by_id[d.metadata["doc_id"]] for d in docs if d.metadata.get("doc_id") in by_id]
 
 
-def hybrid_search(query: str, k: int = 3) -> tuple[list[dict], dict]:
-    """두 검색 결과를 RRF로 합친다. (조각 목록, 검색 상태)를 돌려준다."""
+def hybrid_search(query: str, k: int = DEFAULT_K,
+                  keyword_weight: float = DEFAULT_KEYWORD_WEIGHT,
+                  vector_weight: float = DEFAULT_VECTOR_WEIGHT) -> tuple[list[dict], dict]:
+    """두 검색 결과를 가중 RRF(비중 × 1/(60+순위))로 합친다. (조각 목록, 검색 상태)를 돌려준다."""
     status = {"keyword": "ok", "vector": "ok"}
     lists = [keyword_search(query, k * 2)]
+    weights = [keyword_weight]
     try:
         lists.append(vector_search(query, k * 2))
+        weights.append(vector_weight)
     except Exception as exc:  # Chroma·임베딩 실패는 키워드 검색으로 대체
         status["vector"] = f"실패({type(exc).__name__})"
     scores: dict = {}
-    for ranked in lists:
+    for ranked, weight in zip(lists, weights):
         for rank, c in enumerate(ranked):
-            scores[c["doc_id"]] = scores.get(c["doc_id"], 0) + 1 / (60 + rank)
+            scores[c["doc_id"]] = scores.get(c["doc_id"], 0) + weight / (60 + rank)
     by_id = {c["doc_id"]: c for r in lists for c in r}
     top = sorted(scores, key=lambda d: -scores[d])[:k]
     return [by_id[d] for d in top], status
 
 
-def retrieve_guides(query: str, k: int = 3) -> tuple[list[dict], dict]:
+def retrieve_guides(query: str, k: int = DEFAULT_K,
+                    keyword_weight: float = DEFAULT_KEYWORD_WEIGHT,
+                    vector_weight: float = DEFAULT_VECTOR_WEIGHT) -> tuple[list[dict], dict]:
     """지침 검색 진입점. 검색 전체가 실패해도 예외 없이 빈 목록을 돌려준다."""
     try:
-        return hybrid_search(query, k)
+        return hybrid_search(query, k, keyword_weight, vector_weight)
     except Exception as exc:
         return [], {"keyword": f"실패({type(exc).__name__})", "vector": "건너뜀"}

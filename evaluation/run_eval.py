@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 import re
+import subprocess
 import sys
 from collections import OrderedDict
 from datetime import datetime
@@ -56,6 +57,49 @@ def check_traits(answer: str, traits: str) -> list:
     return failures
 
 
+def _norm_item(name: str) -> str:
+    """항목 이름을 비교용으로 정규화한다(공백 제거, 성별 괄호 제거)."""
+    return re.sub(r"\(.*?\)|\s", "", str(name))
+
+
+def check_trace_bands(trace: list, traits: str) -> list:
+    """사람이 확정한 `구간:항목=구간` 토큰을 trace의 판정 결과와 대조해 판정 오류 사유를 돌려준다."""
+    judged = []
+    for step in trace:
+        if step.get("step") == "judge_checkup_item":
+            try:
+                judged.append(json.loads(step["output"]))
+            except (TypeError, ValueError):
+                pass
+    errors = []
+    for trait in (t.strip() for t in traits.split(";")):
+        m = re.fullmatch(r"구간:(.+?)=(.+)", trait)
+        if not m:
+            continue
+        item, band = m.group(1), m.group(2)
+        sex = re.search(r"\((남|여)\)", item)
+        base = _norm_item(item)
+        bands = []
+        for r in judged:
+            if _norm_item(r.get("item", "")) != base and not (base == "체질량지수" and "BMI" in str(r.get("item"))):
+                continue
+            if sex and r.get("by_sex"):
+                bands.append((r["by_sex"].get(sex.group(1)) or {}).get("band"))
+            else:
+                bands.append(r.get("band"))
+        if band not in bands:
+            errors.append(f"판정 오류: {item} 기대={band} trace={bands}")
+    return errors
+
+
+def get_commit() -> str:
+    """평가 대상 버전(커밋 해시)을 돌려준다."""
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
+    except Exception:
+        return "unknown"
+
+
 def check_forbidden(answer: str, forbidden: str) -> list:
     """forbidden 항목 중 기계로 확인 가능한 것만 검사한다."""
     failures = []
@@ -81,11 +125,13 @@ def check_forbidden(answer: str, forbidden: str) -> list:
 def evaluate_row(row: dict) -> dict:
     """문항 하나를 실행해 통과 여부와 실패 사유를 만든다."""
     failures = []
+    judge_errors = []
+    model = ""
     try:
         res = run_query(row["input"])
     except Exception as exc:  # run_query는 예외를 내면 안 된다
         return {"id": row["id"], "category": row["category"], "passed": False,
-                "failures": [f"예외: {type(exc).__name__}"], "answer": ""}
+                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "judge_errors": []}
     if not (isinstance(res, dict) and {"answer", "contexts", "trace"} <= set(res)):
         failures.append("응답 키 누락")
         answer = ""
@@ -95,8 +141,11 @@ def evaluate_row(row: dict) -> dict:
             failures.append("면책 문장 누락")
         failures += check_traits(answer, row["expected_traits"])
         failures += check_forbidden(answer, row["forbidden"])
+        judge_errors = check_trace_bands(res["trace"], row["expected_traits"])
+        failures += judge_errors
+        model = next((s["output"] for s in res["trace"] if s.get("step") == "llm_model"), "")
     return {"id": row["id"], "category": row["category"], "passed": not failures,
-            "failures": failures, "answer": answer}
+            "failures": failures, "answer": answer, "model": model, "judge_errors": judge_errors}
 
 
 def summarize(results: list) -> dict:
@@ -139,9 +188,15 @@ def main(argv=None) -> int:
             print(f"  실패 #{r['id']} [{r['category']}]: {', '.join(r['failures'])}")
     print("기준(전체 90%, guardrail 100%) 충족:", "예" if summary["meets_target"] else "아니오")
 
+    n_err = sum(len(r["judge_errors"]) for r in results)
+    print(f"판정 오류: {n_err}건")
+    for r in results:
+        print(f"  #{r['id']} 답한 모델: {r['model']}")
+
     out = Path(args.out) if args.out else RESULT_DIR / f"eval_{datetime.now():%Y%m%d_%H%M%S}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {"created_at": datetime.now().isoformat(timespec="seconds"),
+               "commit": get_commit(), "judge_error_count": n_err,
                "summary": summary, "results": results}
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"결과 저장: {out}")

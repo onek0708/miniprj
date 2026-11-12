@@ -315,16 +315,27 @@ def _build_tools(rec: _Recorder) -> list:
     return [judge_checkup_item_tool, calc_bmi_tool, retrieve_guides_tool]
 
 
-def _invoke_agent(question: str) -> dict:
-    """LLM 에이전트(ReAct)를 호출한다. 실패하면 예외를 던진다."""
+PRIMARY_MODEL = "us.anthropic.claude-sonnet-4-6"
+FALLBACK_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+MODEL_REGION = "us-west-2"
+
+
+def _is_throttling(exc: BaseException) -> bool:
+    """Bedrock 한도(ThrottlingException) 오류인지 확인한다."""
+    code = getattr(exc, "response", {}).get("Error", {}).get("Code", "") if hasattr(exc, "response") else ""
+    return "ThrottlingException" in (code, type(exc).__name__) or "ThrottlingException" in str(exc)
+
+
+def _run_agent(question: str, model_id: str) -> dict:
+    """지정한 모델 하나로 LLM 에이전트(ReAct)를 처음부터 실행한다. 실패하면 예외를 던진다."""
     from dotenv import load_dotenv
     from langchain.agents import create_agent
     from langchain_aws import ChatBedrockConverse
 
     load_dotenv()
     rec = _Recorder()
-    # Sonnet 4.5 일일 토큰 한도로 Sonnet 4.6(서울 리전 global 추론 프로필)으로 교체 (기술 스택 고정값과 다름)
-    model = ChatBedrockConverse(model="global.anthropic.claude-sonnet-4-6", region_name="ap-northeast-2")
+    # 기존 서울 리전 global 모델이 일일 토큰 한도에 걸려 us-west-2의 주·예비 모델로 교체 (기술 스택 고정값과 다름)
+    model = ChatBedrockConverse(model=model_id, region_name=MODEL_REGION)
     agent = create_agent(model, _build_tools(rec), system_prompt=SYSTEM_PROMPT)
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
     answer = ensure_band_consistency(result["messages"][-1].text, rec.trace)  # 구간 표기는 코드 판정과 대조한다
@@ -332,6 +343,21 @@ def _invoke_agent(question: str) -> dict:
     answer = ensure_referral(answer, rec.trace)  # 질환의심 진료 안내(G3)도 코드가 보장한다
     answer, contexts = ensure_evidence(answer, question, rec.contexts, rec.trace)  # 근거 표기도 코드가 보장한다
     return {"answer": answer, "contexts": contexts, "trace": rec.trace}
+
+
+def _invoke_agent(question: str) -> dict:
+    """주 모델로 처리하고, 한도(ThrottlingException)가 나면 그 질문을 예비 모델로 처음부터 다시 처리한다.
+
+    한 답변 안에 두 모델이 섞이지 않으며, 답한 모델은 trace의 llm_model 단계에 남는다.
+    """
+    try:
+        model_id, out = PRIMARY_MODEL, _run_agent(question, PRIMARY_MODEL)
+    except Exception as exc:
+        if not _is_throttling(exc):
+            raise
+        model_id, out = FALLBACK_MODEL, _run_agent(question, FALLBACK_MODEL)
+    out["trace"].append({"step": "llm_model", "input": MODEL_REGION, "output": model_id})
+    return out
 
 
 def _result(answer: str, contexts: list, trace: list) -> dict:

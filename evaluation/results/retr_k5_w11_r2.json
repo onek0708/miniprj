@@ -1,0 +1,89 @@
+{
+  "created_at": "2026-11-12T14:55:47",
+  "k": 5,
+  "keyword_weight": 1.0,
+  "vector_weight": 1.0,
+  "judge_model": "us.anthropic.claude-sonnet-4-6 (us-west-2)",
+  "evaluated": 11,
+  "excluded_ids": [
+    "2",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "14",
+    "17",
+    "18"
+  ],
+  "metrics": {
+    "context_recall": {
+      "mean": 0.3106,
+      "scored": 11
+    },
+    "context_precision": {
+      "mean": 0.7504,
+      "scored": 11
+    }
+  },
+  "nan_ids": [],
+  "valid": true,
+  "selection_score": 0.5305,
+  "per_question": [
+    {
+      "id": "1",
+      "context_recall": 0.25,
+      "context_precision": 0.9999999999
+    },
+    {
+      "id": "3",
+      "context_recall": 0.25,
+      "context_precision": 0.9999999999
+    },
+    {
+      "id": "4",
+      "context_recall": 0.0,
+      "context_precision": 0.5833333333041666
+    },
+    {
+      "id": "5",
+      "context_recall": 0.5,
+      "context_precision": 0.6428571428357143
+    },
+    {
+      "id": "6",
+      "context_recall": 0.5,
+      "context_precision": 0.8333333332916666
+    },
+    {
+      "id": "7",
+      "context_recall": 0.5,
+      "context_precision": 0.3888888888759259
+    },
+    {
+      "id": "13",
+      "context_recall": 0.3333333333333333,
+      "context_precision": 0.9999999999
+    },
+    {
+      "id": "15",
+      "context_recall": 0.0,
+      "context_precision": 0.0
+    },
+    {
+      "id": "16",
+      "context_recall": 0.75,
+      "context_precision": 0.8055555555287036
+    },
+    {
+      "id": "19",
+      "context_recall": 0.3333333333333333,
+      "context_precision": 0.9999999999
+    },
+    {
+      "id": "20",
+      "context_recall": 0.0,
+      "context_precision": 0.9999999999
+    }
+  ]
+}

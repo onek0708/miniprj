@@ -1,0 +1,45 @@
+[검색 재실행] #1 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #2 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #3 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #4 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #5 질문문 2개 → 근거 7개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #6 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #7 질문문 2개 → 근거 9개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #8 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #9 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #10 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #11 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #12 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #13 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #14 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #15 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #16 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #17 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #18 질문문 없음 → 제외 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #19 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+[검색 재실행] #20 질문문 1개 → 근거 5개 (k=5, 키워드 1.0:벡터 1.0, 채점 모델 us.anthropic.claude-sonnet-4-6)
+C:\Users\Admin\.ouroboros\worktrees\miniprj3\orch_0ea7633d2803\evaluation\run_ragas.py:140: DeprecationWarning: Importing Faithfulness from 'ragas.metrics' is deprecated and will be removed in v1.0. Please use 'ragas.metrics.collections' instead. Example: from ragas.metrics.collections import Faithfulness
+  from ragas.metrics import (Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall,
+C:\Users\Admin\.ouroboros\worktrees\miniprj3\orch_0ea7633d2803\evaluation\run_ragas.py:140: DeprecationWarning: Importing LLMContextPrecisionWithReference from 'ragas.metrics' is deprecated and will be removed in v1.0. Please use 'ragas.metrics.collections' instead. Example: from ragas.metrics.collections import LLMContextPrecisionWithReference
+  from ragas.metrics import (Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall,
+C:\Users\Admin\.ouroboros\worktrees\miniprj3\orch_0ea7633d2803\evaluation\run_ragas.py:140: DeprecationWarning: Importing LLMContextRecall from 'ragas.metrics' is deprecated and will be removed in v1.0. Please use 'ragas.metrics.collections' instead. Example: from ragas.metrics.collections import LLMContextRecall
+  from ragas.metrics import (Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall,
+C:\Users\Admin\.ouroboros\worktrees\miniprj3\orch_0ea7633d2803\evaluation\run_ragas.py:140: DeprecationWarning: Importing ResponseRelevancy from 'ragas.metrics' is deprecated and will be removed in v1.0. Please use 'ragas.metrics.collections' instead. Example: from ragas.metrics.collections import ResponseRelevancy
+  from ragas.metrics import (Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall,
+C:\Users\Admin\.ouroboros\worktrees\miniprj3\orch_0ea7633d2803\evaluation\run_ragas.py:164: DeprecationWarning: LangchainLLMWrapper is deprecated and will be removed in a future version. Use llm_factory instead: from openai import OpenAI; from ragas.llms import llm_factory; llm = llm_factory('gpt-4o-mini', client=OpenAI(api_key='...'))
+  llm = LangchainLLMWrapper(_FlagChat(model=model_id, region_name=JUDGE_REGION, temperature=0))
+C:\Users\Admin\.ouroboros\worktrees\miniprj3\orch_0ea7633d2803\evaluation\run_ragas.py:165: DeprecationWarning: LangchainEmbeddingsWrapper is deprecated and will be removed in a future version. Use the modern embedding providers instead: embedding_factory('openai', model='text-embedding-3-small', client=openai_client) or from ragas.embeddings import OpenAIEmbeddings, GoogleEmbeddings, HuggingFaceEmbeddings
+  emb = LangchainEmbeddingsWrapper(BedrockEmbeddings(model_id=EMBED_MODEL, region_name=EMBED_REGION))
+[채점] #1 recall=0.25 precision=0.9999999999 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #3 recall=0.25 precision=0.9999999999 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #4 recall=0.0 precision=0.5833333333041666 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #5 recall=0.5 precision=0.6428571428357143 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #6 recall=0.5 precision=0.8333333332916666 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #7 recall=0.5 precision=0.3888888888759259 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #13 recall=0.3333333333333333 precision=0.9999999999 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #15 recall=0.0 precision=0.0 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #16 recall=0.75 precision=0.8055555555287036 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #19 recall=0.3333333333333333 precision=0.9999999999 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[채점] #20 recall=0.0 precision=0.9999999999 (채점 모델 us.anthropic.claude-sonnet-4-6)
+[요약] 채점 모델 us.anthropic.claude-sonnet-4-6 (us-west-2) 유효=True {'context_recall': {'mean': 0.3106, 'scored': 11}, 'context_precision': {'mean': 0.7504, 'scored': 11}}
+결과 저장: evaluation\results\retr_k5_w11_r2.json
