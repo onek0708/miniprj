@@ -1,0 +1,334 @@
+<title>miniprj3 진행 현황</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 레이아웃: 요약 타일 → 챕터별 구현 → 평가 항목 → 남은 일. 한 열 흐름, 표는 가로 스크롤 허용 */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --line: #d9dde3; --line-soft: #e9ecf0;
+  --fg: #141821; --fg-2: #4b5260; --fg-3: #7a8191;
+  --accent: #2a78d6; --accent-soft: #e4eefb;
+  --good: #0ca30c; --good-soft: #e3f5e3; --warn: #b7780a; --warn-soft: #fbf0d6; --crit: #c8322b; --crit-soft: #fbe3e1;
+  --font: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171b; --surface: #1d2026; --line: #343941; --line-soft: #2a2e35;
+    --fg: #eceef2; --fg-2: #b4bac6; --fg-3: #858c9a;
+    --accent: #3987e5; --accent-soft: #1f2f45;
+    --good: #3fbf3f; --good-soft: #1f3420; --warn: #e2a63a; --warn-soft: #3b3120; --crit: #ea6a62; --crit-soft: #40262a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171b; --surface: #1d2026; --line: #343941; --line-soft: #2a2e35;
+  --fg: #eceef2; --fg-2: #b4bac6; --fg-3: #858c9a;
+  --accent: #3987e5; --accent-soft: #1f2f45;
+  --good: #3fbf3f; --good-soft: #1f3420; --warn: #e2a63a; --warn-soft: #3b3120; --crit: #ea6a62; --crit-soft: #40262a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; line-height: 1.55;
+  word-break: keep-all; overflow-wrap: anywhere;
+  padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: var(--fg-2); }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+a { color: var(--accent); }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 500; }
+header { display: grid; gap: 8px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--fg-2); font-size: 13px; }
+.meta b { color: var(--fg); font-weight: 500; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.tile .label { font-size: 12px; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.1; }
+.tile .sub { font-size: 12px; color: var(--fg-3); }
+.tile.good { border-left: 4px solid var(--good); }
+.tile.warn { border-left: 4px solid var(--warn); }
+.tile.crit { border-left: 4px solid var(--crit); }
+
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px; min-width: 0; }
+.lead { color: var(--fg-2); margin-bottom: 12px; max-width: 70ch; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); }
+th { font-size: 12px; color: var(--fg-2); font-weight: 500; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.k { white-space: nowrap; font-weight: 500; }
+tr.muted td { color: var(--fg-3); }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--fg); }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.chip.good { background: var(--good-soft); } .chip.good::before { background: var(--good); }
+.chip.warn { background: var(--warn-soft); } .chip.warn::before { background: var(--warn); }
+.chip.crit { background: var(--crit-soft); } .chip.crit::before { background: var(--crit); }
+.chip.off { background: var(--line-soft); color: var(--fg-2); } .chip.off::before { background: var(--fg-3); }
+.chip.info { background: var(--accent-soft); } .chip.info::before { background: var(--accent); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.cols > div { min-width: 0; }
+
+/* 진행 단계 타임라인 */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.steps li { display: grid; grid-template-columns: 112px 18px 1fr; gap: 0 12px; align-items: start; padding: 8px 0; }
+.steps .when { font-family: var(--mono); font-size: 12px; color: var(--fg-3); padding-top: 3px; white-space: nowrap; }
+.steps .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--good); margin-top: 6px; box-shadow: 0 0 0 2px var(--surface); }
+.steps .dot.now { background: var(--accent); }
+.steps .dot.todo { background: var(--surface); border: 2px solid var(--fg-3); }
+.steps .what b { font-weight: 700; }
+.steps .what span { color: var(--fg-2); display: block; }
+@media (max-width: 520px) { .steps li { grid-template-columns: 18px 1fr; } .steps .when { grid-column: 2; order: 3; padding-top: 0; } }
+
+/* 통과율 차트 */
+.chart { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; max-width: 100%; }
+.chart .bar { fill: var(--accent); cursor: default; }
+.chart .bar:hover { fill-opacity: 0.8; }
+.chart .grid { stroke: var(--line-soft); stroke-width: 1; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .target { stroke: var(--crit); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.chart text { font-family: var(--font); font-size: 11.5px; fill: var(--fg-2); }
+.chart text.v { fill: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+.chart text.t { fill: var(--crit); font-size: 11px; }
+.tip { position: absolute; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 12px; padding: 5px 8px; border-radius: 5px; transform: translate(-50%, -110%); white-space: nowrap; opacity: 0; transition: opacity .12s; }
+.tip.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+
+.check { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.check li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: start; }
+.check .box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line); margin-top: 3px; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.check .box.on { background: var(--good); border-color: var(--good); color: #fff; }
+.check .box.half { background: var(--warn); border-color: var(--warn); color: #fff; }
+.check small { color: var(--fg-3); }
+.todo { display: grid; gap: 10px; }
+.todo .item { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 6px; }
+.todo .item .chip { justify-self: start; }
+@media (max-width: 520px) { .todo .item { grid-template-columns: 1fr; } }
+.todo .item p { color: var(--fg-2); font-size: 13px; }
+.todo .item b { display: block; margin-bottom: 2px; }
+footer { color: var(--fg-3); font-size: 12px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">삼성SDS AX 교육 · Day 8~10 미니 프로젝트</div>
+    <h1>건강검진 수치 해석 어시스턴트 — 진행 현황</h1>
+    <p class="lead">검진 수치를 입력하면 판정 구간(정상·경계·질환의심)과 생활습관 지침을 근거와 함께 답하는 에이전트입니다. 판정·계산은 파이썬 코드가, 설명과 지침 검색은 모델이 맡습니다.</p>
+    <div class="meta">
+      <span>기준 시각 <b>2026-11-12 22:10</b></span>
+      <span>main <b><code>bd36899</code></b> (원격과 같음)</span>
+      <span>저장소 <b>onek0708/miniprj3</b> <span class="chip crit">PRIVATE · public 전환 필요</span></span>
+      <span>마감 <b>Day 10 15:00</b> Google Form 제출</span>
+    </div>
+  </header>
+
+  <div class="tiles">
+    <div class="tile good"><div class="label">인-아웃 세트 (새 채점 기준)</div><div class="num">19 / 20</div><div class="sub">95% · 목표 90% 충족</div></div>
+    <div class="tile good"><div class="label">guardrail 문항</div><div class="num">3 / 3</div><div class="sub">100% · 목표 100%</div></div>
+    <div class="tile good"><div class="label">판정 오류</div><div class="num">0건</div><div class="sub">trace와 답의 구간 대조</div></div>
+    <div class="tile good"><div class="label">단위 테스트</div><div class="num">211</div><div class="sub">전부 통과 · 테스트 파일 21개</div></div>
+    <div class="tile good"><div class="label">패턴 적용 (12개 중)</div><div class="num">8</div><div class="sub">필수 4개 모두 포함 · 목표 8</div></div>
+    <div class="tile warn"><div class="label">완료 기준 (GUIDE 9장)</div><div class="num">12 / 13</div><div class="sub">남은 것: Google Form 제출</div></div>
+  </div>
+
+  <section>
+    <h2>1. 교육 챕터별 구현 내용 (Day 1~7 패턴 12개)</h2>
+    <p class="lead">강의에서 배운 12개 패턴 중 필수 4개를 모두 넣고 8개를 적용했습니다. 쓰지 않은 3개는 이유를 README에 적었습니다.</p>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Day</th><th>패턴</th><th>구분</th><th>상태</th><th>이 프로젝트에서 구현한 것</th><th>코드 위치</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Day 1</td><td>LCEL chain · Pydantic 구조화 출력</td><td>필수</td><td><span class="chip good">적용</span></td><td>판정·BMI 결과와 응답 스키마를 Pydantic(<code>JudgeOutput</code>, <code>BmiOutput</code>, <code>QueryResponse</code>)으로 고정. 응답은 <code>answer</code>·<code>contexts</code>·<code>trace</code> 세 키</td><td><code>src/agent.py</code></td></tr>
+        <tr><td class="k">Day 2</td><td>RAG · 하이브리드 검색</td><td>필수</td><td><span class="chip good">적용</span></td><td>키워드 검색 + Chroma 벡터 검색(Titan 임베딩)을 RRF로 합쳐 <code>data/guides/*.md</code> 지침을 찾음. k=3, 같은 비중. 주제 필터로 관계없는 조각 제거</td><td><code>src/retriever.py</code></td></tr>
+        <tr><td class="k">Day 3</td><td>ReAct · 도구 자율 선택</td><td>권장</td><td><span class="chip good">적용</span></td><td><code>create_agent</code>가 질문에 따라 판정·계산·검색 도구를 골라 호출. temperature=0</td><td><code>src/agent.py</code></td></tr>
+        <tr><td class="k">Day 4</td><td>도구 다중</td><td>권장</td><td><span class="chip good">적용</span></td><td>한 질문에 <code>judge_checkup_item</code>, <code>calc_bmi</code>, <code>retrieve_guides</code>를 함께 사용. 판정 13개 항목, 반개구간, 단위 환산, 보류 규칙은 코드</td><td><code>src/tools.py</code></td></tr>
+        <tr class="muted"><td class="k">Day 4</td><td>MCP 서버 연동</td><td>선택</td><td><span class="chip off">미적용</span></td><td>시간이 남으면 판정 도구를 MCP로 노출하려 했으나 넣지 않음</td><td>—</td></tr>
+        <tr><td class="k">Day 5</td><td>가드레일</td><td>권장</td><td><span class="chip good">적용</span></td><td>입력 가드(진단 확정·약 요청 차단, 개인정보 마스킹, 지시문 제거)와 출력 가드(구간 표기 대조, 진료 안내·출처·가정 보충, 범위 밖 고정 문장)를 모두 코드로</td><td><code>src/guards.py</code>, <code>src/agent.py</code></td></tr>
+        <tr class="muted"><td class="k">Day 5</td><td>HITL · 위험 작업 승인</td><td>권장</td><td><span class="chip off">미적용</span></td><td>되돌릴 수 없는 작업이 없어 쓰지 않음</td><td>—</td></tr>
+        <tr><td class="k">Day 5</td><td>미들웨어 · 마스킹, 재시도</td><td>권장</td><td><span class="chip good">적용</span></td><td>개인정보 마스킹, 모델 호출 실패 시 고정 안내로 응답. Bedrock 한도 시 10단계 (리전, 모델) 순서로 전환</td><td><code>src/agent.py</code> <code>MODEL_ORDER</code></td></tr>
+        <tr class="muted"><td class="k">Day 6</td><td>Multi-Agent Supervisor</td><td>권장</td><td><span class="chip off">미적용</span></td><td>에이전트 하나로 충분한 규모</td><td>—</td></tr>
+        <tr class="muted"><td class="k">Day 7</td><td>Plan-Execute · 장기 메모리</td><td>권장</td><td><span class="chip off">미적용</span></td><td>한 번 묻고 한 번 답하는 서비스</td><td>—</td></tr>
+        <tr><td class="k">Day 7</td><td>Observability · Trace</td><td>필수</td><td><span class="chip good">적용</span></td><td>응답 <code>trace</code>에 가드 감지, 도구 호출 입출력, 검색, 답한 모델·리전, 고정 답변 대체 여부를 단계별로 기록</td><td><code>src/agent.py</code> <code>_Recorder</code></td></tr>
+        <tr><td class="k">Day 7</td><td>평가 · RAGAS, LLM-as-Judge</td><td>필수</td><td><span class="chip good">적용</span></td><td>20문항 인-아웃 세트를 코드 검사 + LLM-as-Judge(temperature 0, 정답 미제공)로 채점. judge 자가 점검 8/8 기록. RAGAS 네 지표 측정</td><td><code>evaluation/run_eval.py</code>, <code>llm_judge.py</code>, <code>run_ragas.py</code></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Day 8~10 프로젝트 진행 단계</h2>
+    <ul class="steps">
+      <li><span class="when">11-11</span><span class="dot"></span><div class="what"><b>기획 · SERVICE.md · 20문항 CSV</b> <span>— Ouroboros 인터뷰로 요구사항 확정, 성공 기준 10개, 가드레일 5건</span></div></li>
+      <li><span class="when">11-11 16:57</span><span class="dot"></span><div class="what"><b>1차 평가 6/20</b> <span>— 판정 도구·가드 포함 구성. 자격 증명 없음 등 환경 문제로 낮게 측정</span></div></li>
+      <li><span class="when">11-11 ~ 12</span><span class="dot"></span><div class="what"><b>2차 개선 · 재측정 20/20</b> <span>— 검색 설정 비교(k·비중), 주제 필터, 프롬프트 정제, RAGAS 측정</span></div></li>
+      <li><span class="when">11-12 15:58</span><span class="dot"></span><div class="what"><b>모델 10단계 순서 적용 20/20</b> <span>— Haiku 예비 모델 실패(14/20)를 되돌리고 Sonnet 4.6 → 4.5 순서로 교체</span></div></li>
+      <li><span class="when">11-12 21:02</span><span class="dot"></span><div class="what"><b>LLM-as-Judge 도입 17/20</b> <span>— 서술형 항목까지 채점하자 점수 하락. 문항·기준은 바꾸지 않고 기록</span></div></li>
+      <li><span class="when">11-12 21:33</span><span class="dot"></span><div class="what"><b>서비스 보완 19/20</b> <span>— temperature=0, 고정 안내 문장, 공복 가정 보장, 약 요청 가드 보강</span></div></li>
+      <li><span class="when">11-12 22:05</span><span class="dot now"></span><div class="what"><b>main 병합 · 푸시 완료 (bd36899)</b> <span>— README·SERVICE.md 갱신까지 원격 반영</span></div></li>
+      <li><span class="when">Day 10 15:00</span><span class="dot todo"></span><div class="what"><b>제출</b> <span>— 저장소 public 전환 후 Google Form 제출</span></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. 인-아웃 세트 통과율 변화 (고정 20문항)</h2>
+    <p class="lead">같은 20문항을 측정마다 다시 돌린 결과입니다. 점선은 목표 18/20(90%)입니다. 마지막 두 번은 LLM-as-Judge를 더한 엄격한 채점이라 그 전과 같은 선에서 비교할 수 없습니다.</p>
+    <div class="chart" id="chart"></div>
+    <div class="cols" style="margin-top:16px">
+      <div>
+        <h3>최신 결과 카테고리별 (final_eval_service_fix.json, 커밋 e7590e0)</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>구분</th><th class="num">통과</th><th class="num">통과율</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td class="k">positive</td><td class="num">7 / 8</td><td class="num">87.5%</td><td>#4 체질량지수: 판정은 경계로 맞지만 답에서 항목명과 구간이 다른 줄에 있어 코드 검사가 못 찾음</td></tr>
+            <tr><td class="k">negative</td><td class="num">4 / 4</td><td class="num">100%</td><td>범위 밖 검사·수치 없음은 코드가 정한 고정 문장</td></tr>
+            <tr><td class="k">edge</td><td class="num">5 / 5</td><td class="num">100%</td><td>허용 범위 밖, 단위 환산, 성별 미입력 등</td></tr>
+            <tr><td class="k">guardrail</td><td class="num">3 / 3</td><td class="num">100%</td><td>약 요청 차단, 개인정보 미반복, 지시문 무시</td></tr>
+            <tr><td class="k">전체</td><td class="num">19 / 20</td><td class="num">95%</td><td>판정 오류 0건 · 사람 확인 필요 0건 · judge 자가 점검 8/8</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div>
+        <h3>RAGAS 네 지표 (17문항, 근거 없는 3문항 제외)</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>지표</th><th class="num">최종</th><th class="num">개선 전</th></tr></thead>
+          <tbody>
+            <tr><td class="k">context_recall</td><td class="num">0.679</td><td class="num">0.250</td></tr>
+            <tr><td class="k">context_precision</td><td class="num">0.978</td><td class="num">0.684</td></tr>
+            <tr><td class="k">faithfulness</td><td class="num">0.455</td><td class="num">0.232</td></tr>
+            <tr><td class="k">answer_relevancy</td><td class="num">0.412</td><td class="num">0.516</td></tr>
+          </tbody>
+        </table></div>
+        <p style="color:var(--fg-3);font-size:12px;margin-top:8px">통과 기준 없이 기록만 하는 지표입니다. 값은 모델 순서 변경과 서비스 보완 <b>이전</b> 설정에서 잰 것이며, 재측정은 마지막에 1회만 예정입니다(호출 수백 회).</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. 평가 항목 현황</h2>
+    <div class="cols">
+      <div>
+        <h3>강의 채점 기준 5가지</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>채점 기준</th><th>상태</th><th>증거</th></tr></thead>
+          <tbody>
+            <tr><td class="k">SERVICE.md 품질</td><td><span class="chip good">준비됨</span></td><td>사용자·문제·가치, 성공 기준 10개(숫자), 가드레일 5건이 문항에 연결. 모델 표기 10단계로 갱신</td></tr>
+            <tr><td class="k">서비스 임팩트</td><td><span class="chip good">준비됨</span></td><td>"결과지 수치를 몰라 덮는다" 문제 하나에 집중. 확장: 사내 건강관리, 검진센터 상담 보조</td></tr>
+            <tr><td class="k">에이전트 개발 완성도</td><td><span class="chip good">준비됨</span></td><td>판정(코드)·설명(모델) 분리 아키텍처, 필수 패턴 4/4, 적용 8/12, 테스트 211개</td></tr>
+            <tr><td class="k">인-아웃 세트 충족도</td><td><span class="chip good">충족</span></td><td>1차 6/20 → 최종 19/20. 개선폭과 원인별 수정이 round1·round2 리포트에 기록</td></tr>
+            <tr><td class="k">가드레일 준수</td><td><span class="chip good">충족</span></td><td>guardrail 문항 3/3, 입력·출력 가드 코드, trace에 감지 기록</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>GUIDE.md 완료 기준 체크리스트</h3>
+        <ul class="check">
+          <li><span class="box on">✓</span><span>폴더 구조 규약 (<code>src/agent.py</code>·<code>tools.py</code>·<code>retriever.py</code>, <code>data/</code>, <code>evaluation/</code>)</span></li>
+          <li><span class="box on">✓</span><span>SERVICE.md 템플릿 5개 항목</span></li>
+          <li><span class="box on">✓</span><span>test_queries.csv 7컬럼 · 20건 · 네 카테고리</span></li>
+          <li><span class="box on">✓</span><span><code>POST /query</code> → answer·contexts·trace (차단 포함)</span></li>
+          <li><span class="box on">✓</span><span>2차 평가 90% 이상 · guardrail 100% · 판정 오류 0 · 경계값 단위 테스트</span></li>
+          <li><span class="box on">✓</span><span>run_eval.py가 카테고리별·전체 통과율 출력과 파일 저장</span></li>
+          <li><span class="box on">✓</span><span>반복 루프 1바퀴 이상, 무엇을 왜 고쳤는지 리포트에 기록</span></li>
+          <li><span class="box on">✓</span><span>round1·round2 리포트와 개선폭, 원인별 구분</span></li>
+          <li><span class="box on">✓</span><span>README 템플릿 (RAGAS 네 지표, 통과율, 트라이앤에러 회고)</span></li>
+          <li><span class="box on">✓</span><span>필수 패턴 1·3·11·12 구현</span></li>
+          <li><span class="box on">✓</span><span>criteria.json·지침 문서에 출처와 확인 날짜</span></li>
+          <li><span class="box on">✓</span><span>.env와 키가 저장소에 없음</span></li>
+          <li><span class="box half">!</span><span>Day 10 15:00 전 Google Form 제출 <small>— 저장소 public 전환 뒤 제출</small></span></li>
+        </ul>
+      </div>
+      <div>
+        <h3>SERVICE.md 기능 성공 기준 10개</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>기준</th><th>확인 방법</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td class="k">판정 정확성</td><td>경계값 단위 테스트 (<code>test_judge.py</code>)</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>2</td><td class="k">보류 처리</td><td>단위 테스트 + 문항 #7, #12, #13, #17</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>3</td><td class="k">가정과 환산 명시</td><td><code>test_assumptions.py</code>, <code>test_fasting_assumption.py</code> + #8, #16, #19</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>4</td><td class="k">판정은 코드만</td><td>answer·trace 구간 대조, 판정 오류 0건</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>5</td><td class="k">근거 표기</td><td><code>test_evidence.py</code> + 경계·질환의심 문항</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>6</td><td class="k">질환의심 진료 안내 (G3)</td><td><code>test_referral.py</code> + #3, #6</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>7</td><td class="k">차단 응답 (G1, G2)</td><td><code>test_drug_guard.py</code> + #18</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>8</td><td class="k">개인정보 미반복 (G4)</td><td>입력 가드 테스트 + #8, #19</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>9</td><td class="k">지시문 무시 (G5)</td><td>입력 가드 테스트 + #20</td><td><span class="chip good">통과</span></td></tr>
+            <tr><td>10</td><td class="k">면책과 응답 형식</td><td><code>test_disclaimer_shape.py</code>, <code>test_query_api.py</code></td><td><span class="chip good">통과</span></td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>채점 방식 (GUIDE 7.3, 코드 우선 혼합)</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>무엇을</th><th>누가</th></tr></thead>
+          <tbody>
+            <tr><td>구간 토큰(<code>구간:항목=구간</code>), 도구 호출, 면책, 진료 권고 키워드, 더미 개인정보, 키워드형 금지 항목</td><td>코드</td></tr>
+            <tr><td>표현형 금지 항목(단정·추천 뉘앙스 등 20개 값 중 18개), 문장 성격 항목(안내·권유 18개 값)</td><td>LLM-as-Judge (Sonnet 4.6, temperature 0)</td></tr>
+            <tr><td>judge 호출 실패·해석 불가</td><td>실패로 세지 않고 "사람 확인 필요" 목록 (현재 0건)</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>5. 남은 일과 주의할 점</h2>
+    <div class="todo">
+      <div class="item"><span class="chip crit">제출 전 필수</span><div><b>저장소를 public으로 전환</b><p>GitHub Settings → Danger Zone → Change visibility. 지금은 PRIVATE이라 제출 규약(public repository)에 맞지 않습니다. 바꾼 뒤 Google Form에 주소 제출.</p></div></div>
+      <div class="item"><span class="chip warn">선택</span><div><b>RAGAS 마지막 1회 재측정</b><p>현재 값은 옛 설정 기준이라고 README에 적혀 있어 규약상 문제는 없습니다. 호출이 수백 회라 Bedrock 한도를 확인하고 한 번만 잽니다.</p></div></div>
+      <div class="item"><span class="chip warn">선택</span><div><b>#4 체질량지수 답 형식</b><p>판정은 맞는데 새 답 구조에서 항목명(표)과 구간(다른 줄)이 떨어져 코드 검사가 못 찾습니다. 검사를 느슨하게 할지, 답 구조를 바꿀지는 사용자 결정. 19/20이라 기준에는 영향 없음.</p></div></div>
+      <div class="item"><span class="chip warn">선택</span><div><b>검색 품질 코드 채점 (3번 작업)</b><p>문항별 정답 지침 문서 목록을 사람이 확정해야 하고, 새 파일이 필요합니다. LLM 호출 없이 몇 초 만에 비교 가능.</p></div></div>
+      <div class="item"><span class="chip info">강사 확인</span><div><b>열린 질문</b><p><code>app.py</code>·<code>eval_set.json</code>을 따로 내야 하는지, 별도 public 저장소여도 되는지, RAGAS를 ragas 패키지로 내야 하는지 (GUIDE.md 10장).</p></div></div>
+    </div>
+  </section>
+
+  <footer>원본: README.md, SERVICE.md, GUIDE.md, evaluation/round1_report.md·round2_report.md, evaluation/results/*.json (main bd36899). 숫자는 결과 파일에서 읽어 적었습니다.</footer>
+</div>
+
+<script>
+(function () {
+  var data = [
+    { label: "1차", date: "11-11", v: 6, note: "판정 도구·가드 포함, 환경 문제로 낮음" },
+    { label: "2차", date: "11-11", v: 7, note: "의존성 설치 후 8/20" },
+    { label: "2차 재측정", date: "11-12", v: 20, note: "자격 증명 보완, Sonnet 4.6" },
+    { label: "Haiku 예비", date: "11-12", v: 14, note: "Haiku가 판정 도구를 안 불러 되돌림" },
+    { label: "10단계 순서", date: "11-12", v: 20, note: "커밋 42c6d07, judge 도입 전 채점" },
+    { label: "Judge 도입", date: "11-12", v: 17, note: "커밋 3ebd95e, 서술형 항목까지 채점" },
+    { label: "서비스 보완", date: "11-12", v: 19, note: "커밋 e7590e0, 최신" }
+  ];
+  var W = 900, H = 260, padL = 36, padR = 16, padT = 16, padB = 46;
+  var innerW = W - padL - padR, innerH = H - padT - padB;
+  var n = data.length, slot = innerW / n, barW = Math.min(44, slot * 0.5);
+  function y(v) { return padT + innerH - (v / 20) * innerH; }
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="측정별 통과 문항 수, 20문항 중">';
+  [0, 5, 10, 15, 20].forEach(function (g) {
+    s += '<line class="grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(g) + '" y2="' + y(g) + '"/>';
+    s += '<text x="' + (padL - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end">' + g + '</text>';
+  });
+  s += '<line class="axis" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '"/>';
+  s += '<line class="target" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(18) + '" y2="' + y(18) + '"/>';
+  s += '<text class="t" x="' + (W - padR) + '" y="' + (y(18) - 5) + '" text-anchor="end">목표 18 (90%)</text>';
+  data.forEach(function (d, i) {
+    var cx = padL + slot * i + slot / 2, x = cx - barW / 2, top = y(d.v), h = y(0) - top;
+    s += '<path class="bar" data-i="' + i + '" d="M' + x + ' ' + y(0) + ' V' + (top + 4) + ' a4 4 0 0 1 4 -4 h' + (barW - 8) + ' a4 4 0 0 1 4 4 V' + y(0) + ' Z"/>';
+    if (i === 0 || i === n - 1) s += '<text class="v" x="' + cx + '" y="' + (top - 6) + '" text-anchor="middle">' + d.v + '/20</text>';
+    s += '<text x="' + cx + '" y="' + (H - padB + 18) + '" text-anchor="middle">' + d.label + '</text>';
+    s += '<text x="' + cx + '" y="' + (H - padB + 33) + '" text-anchor="middle" style="fill:var(--fg-3)">' + d.date + '</text>';
+  });
+  s += '</svg>';
+  var el = document.getElementById('chart');
+  el.innerHTML = s + '<div class="tip" id="tip"></div>';
+  var tip = document.getElementById('tip');
+  el.querySelectorAll('.bar').forEach(function (b) {
+    b.addEventListener('mousemove', function (e) {
+      var d = data[+b.getAttribute('data-i')], r = el.getBoundingClientRect();
+      tip.textContent = d.label + ' · ' + d.v + '/20 (' + Math.round(d.v / 20 * 100) + '%) · ' + d.note;
+      tip.style.left = (e.clientX - r.left) + 'px'; tip.style.top = (e.clientY - r.top) + 'px';
+      tip.classList.add('on');
+    });
+    b.addEventListener('mouseleave', function () { tip.classList.remove('on'); });
+  });
+})();
+</script>
