@@ -531,3 +531,20 @@ judge_checkup_item('혈색소', 12.5)            -> band None, by_sex {'남': {.
 - 최신 결과 파일: `evaluation/results/final_eval_e974e5e.json` (콘솔 원문 `final_eval_e974e5e.log`). **commit 값 `e974e5e` = 최종 코드 커밋**이다. 평가는 `e974e5e`를 체크아웃한 깨끗한 작업 트리에서 전체를 새로 실행했다(`python -m pytest` 233 passed 후 `python evaluation/run_eval.py --out ...`).
 - 숫자: 전체 **20/20**, positive 8/8, negative 4/4, edge 5/5, guardrail **3/3**, 판정 오류 **0건**, judge 위반 0건, 사람 확인 필요 0건(`human_check_ids` 빈 목록), 남은 실패 문항 없음. 위 요약과 README의 값은 모두 이 파일과 같다.
 - 재작업 전 코드(`14e4c8f`)의 `final_eval_round2_fix.json`(20/20)은 이전 기록으로 남기되 최신 결과로 쓰지 않는다. `final_eval_ensure_summary.json`(commit 값 `fb91400`, 리포트만 바뀐 이후 커밋)도 같은 20/20이지만 commit 값이 최종 코드 커밋과 달라 최종 결과 파일로 지정하지 않는다.
+
+## 최종 경계 재확인
+
+이전 세대·`--skip-completed`에서 assumed로 이어받은 항목은 인정하지 않고, 아래 명령을 최종 코드 커밋 기준으로 2026-11-12에 다시 실행해 실제 출력으로 대체했다(검증 상태: verified_at_final_commit).
+
+- 최종 코드 커밋: `e974e5e3a5a1fecbcc9bd6430ab4c78f2dc5aba3` (`git log -1 --format=%H -- src tests`, ensure_summary 재작업 포함). 확인 시점 HEAD는 리포트·결과만 바꾼 후속 커밋이며 `git diff --quiet e974e5e HEAD -- src tests`의 종료 코드는 0(차이 없음)이다.
+
+| 확인 | 명령 | 실제 출력 |
+|---|---|---|
+| pytest | `.venv` 파이썬 `python -m pytest -q` (저장소 루트, Bedrock 호출 없음) | `233 passed in 29.52s` |
+| 최종 run_eval 결과 commit 값 | `evaluation/results/final_eval_final_code.json`의 `commit` | `e974e5e` (= 최종 코드 커밋). 전체 20/20, guardrail 3/3, 판정 오류 0건, judge 위반 0건. 콘솔 원문 `final_eval_final_code.log` |
+| 동일 커밋 추가 결과 | `final_eval_e974e5e.json`의 `commit` | `e974e5e`, 20/20, guardrail 3/3, 판정 오류 0 |
+| git status | `git status --short` (평가 전, 코드 변경 없음) | src/·tests/·evaluation/run_eval.py 변경 0줄(남은 것은 결과 파일 untracked뿐) |
+| .env 추적 여부 | `git ls-files .env \| wc -l` | `0` (커밋되지 않음) |
+| 데이터·문항·서비스 문서 | `git diff --quiet b515caa -- data/criteria.json evaluation/test_queries.csv SERVICE.md; echo $?` | `0` (시작 기준과 동일) |
+
+앞 절의 `final_eval_ensure_summary.json`(commit `fb91400`)은 보조 증거이고, 최종 결과는 commit 값이 최종 코드 커밋과 일치하는 `final_eval_final_code.json`이다.
