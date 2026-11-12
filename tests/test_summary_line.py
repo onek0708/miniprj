@@ -72,7 +72,7 @@ def test_hold_item_line_has_reason_without_band():
 
 def test_hold_item_already_stated_is_kept():
     r = judge_checkup_item("폴산", 3)
-    ans = "폴산은 판정 보류입니다."
+    ans = "폴산 3은 판정 보류입니다."
     assert agent.ensure_summary(ans, _trace(r)) == ans
 
 
@@ -85,3 +85,57 @@ def test_summary_band_always_matches_tool_result_after_band_consistency():
 
 def test_no_judge_results_leaves_answer_unchanged():
     assert agent.ensure_summary("안녕하세요", []) == "안녕하세요"
+
+
+def test_sex_specified_calls_give_one_tagged_line_each():
+    rm = judge_checkup_item("혈색소", 12, "g/dL", sex="남")
+    rf = judge_checkup_item("혈색소", 12, "g/dL", sex="여")
+    out = agent.ensure_summary("혈색소 결과입니다.", _trace(rm, rf))
+    assert _has_line(out, "혈색소", "남 기준", "12", rm["band"], rm["range"])
+    assert _has_line(out, "혈색소", "여 기준", "12", rf["band"], rf["range"])
+
+
+def test_model_line_without_sex_tag_is_not_accepted():
+    rm = judge_checkup_item("혈색소", 12, "g/dL", sex="남")
+    ans = f"혈색소 12 g/dL: {rm['band']} (기준 {rm['range']})"
+    assert "[판정 요약]" in agent.ensure_summary(ans, _trace(rm))
+    ok = f"혈색소 (남성) 12 g/dL: {rm['band']} (기준 {rm['range']})"
+    assert agent.ensure_summary(ok, _trace(rm)) == ok
+
+
+def test_same_item_different_values_both_summarized_and_duplicates_merged():
+    a = judge_checkup_item("총콜레스테롤", 210, "mg/dL")
+    b = judge_checkup_item("총콜레스테롤", 250, "mg/dL")
+    out = agent.ensure_summary("결과입니다.", _trace(a, b, a))
+    summary = out.split("[판정 요약]")[1]
+    assert _has_line(summary, "총콜레스테롤", "210") and _has_line(summary, "총콜레스테롤", "250")
+    assert summary.count("210") == 1
+
+
+def test_value_substring_is_not_a_match():
+    r = judge_checkup_item("혈색소", 12, "g/dL", sex="남")
+    ans = f"혈색소 (남 기준) 112 g/dL: {r['band']} (기준 {r['range']})"
+    assert "[판정 요약]" in agent.ensure_summary(ans, _trace(r))
+
+
+def test_model_line_with_only_loose_range_is_not_accepted():
+    r = judge_checkup_item("공복혈당", 110, "mg/dL")
+    ans = "공복혈당 110 mg/dL: 경계 (100 ~ 125, 공복 기준)"
+    assert "[판정 요약]" in agent.ensure_summary(ans, _trace(r))
+
+
+def test_generated_lines_match_trait_code_patterns():
+    from evaluation.run_eval import TRAIT_CODE_PATTERNS
+    g = judge_checkup_item("공복혈당", 110, "mg/dL")
+    out = agent.ensure_summary("결과입니다.", _trace(g))
+    assert TRAIT_CODE_PATTERNS["기준 범위(100 이상 126 미만) 표기"].search(out)
+    b = calc_bmi(170, 79.2)
+    r = judge_checkup_item("체질량지수", b["bmi"])
+    assert TRAIT_CODE_PATTERNS["체질량지수 27.4 표기"].search(agent.ensure_summary("비만", _trace(r, bmi=b)))
+
+
+def test_disclaimer_stays_last_line():
+    r = judge_checkup_item("공복혈당", 110, "mg/dL")
+    ans = agent.ensure_summary(agent.ensure_band_consistency("경계입니다.", _trace(r)), _trace(r))
+    final = agent._result(ans, [], _trace(r))["answer"]
+    assert final.split("\n")[-1] == agent.DISCLAIMER and "[판정 요약]" in final

@@ -169,44 +169,65 @@ def _fmt_value(v) -> str:
     return f"{v:g}" if isinstance(v, (int, float)) else str(v)
 
 
-def _summary_entries(r: dict, bmi: Optional[float]) -> list[tuple[str, str]]:
-    """판정 결과 하나를 (한 줄 요약, 줄에 반드시 있어야 할 단어 모음) 목록으로 만든다. 성별 구분은 남·여 각각."""
-    name, unit = str(r.get("item", "")), r.get("unit") or ""
-    if r.get("status") != "판정":
-        return [(f"- {name} {_fmt_value(r.get('value'))}{unit}: 판정 보류 ({r.get('reason', '')})", "")]
-    subs = [(f" ({s} 기준)", v) for s, v in r["by_sex"].items() if v.get("status") == "판정"] \
-        if r.get("by_sex") else [("", r)]
-    out = []
-    for tag, v in subs:
-        rng = v.get("range") or v.get("range_note") or ""
-        calc = f" (계산값 {bmi:g})" if bmi is not None and name == "체질량지수" else ""
-        fast = " (공복 기준 수치로 판정)" if name == "공복혈당" else ""
-        line = (f"- {name}{tag} {_fmt_value(v.get('value'))}{v.get('unit') or unit}{calc}: "
-                f"{v.get('band')} 구간 (기준 {rng}){fast}")
-        out.append((line, "\n".join((name, _fmt_value(v.get("value")), str(v.get("band")), rng))))
-    return out
+def _summary_items(trace: list) -> list[dict]:
+    """trace의 judge_checkup_item·calc_bmi 결과를 요약 단위로 정규화한다.
+
+    (항목, 값, 성별)이 같은 결과는 하나로 합치고, 성별이 다르거나 값이 다른 결과는 각각 남긴다.
+    성별 결과는 by_sex에서 오거나 결과의 sex 필드(성별 지정 호출)에서 온다.
+    """
+    bmi_calc = next((b["bmi"] for b in reversed([_loads(x) for x in trace if x.get("step") == "calc_bmi"])
+                     if b.get("bmi") is not None), None)
+    seen: dict[tuple, dict] = {}
+    for r in _judge_results(trace):
+        subs = [(sx, v) for sx, v in r["by_sex"].items()] if r.get("by_sex") else [(r.get("sex"), r)]
+        for sex, v in subs:
+            value = v.get("value", r.get("value"))
+            key = (r.get("item"), float(value) if isinstance(value, (int, float)) else value, sex)
+            if key not in seen:
+                seen[key] = {"item": str(r.get("item", "")), "value": value, "unit": v.get("unit") or r.get("unit") or "",
+                             "sex": sex, "status": v.get("status", r.get("status")), "band": v.get("band"),
+                             "range_text": v.get("range") or v.get("range_note") or "",
+                             "reason": v.get("reason", r.get("reason", "")), "bmi": None}
+                if seen[key]["item"] == "체질량지수" and bmi_calc is not None:
+                    seen[key]["bmi"] = bmi_calc
+    return list(seen.values())
+
+
+def _summary_line(e: dict) -> str:
+    """요약 단위 하나를 항목 이름·입력값·단위·구간·기준 원문 표기가 든 한 줄로 만든다."""
+    tag = f" ({e['sex']} 기준)" if e["sex"] else ""
+    head = f"- {e['item']}{tag} {_fmt_value(e['value'])}{e['unit']}"
+    if e["status"] != "판정":
+        return f"{head}: 판정 보류 ({e['reason']})"
+    calc = f" (계산값 {e['bmi']:g})" if e["bmi"] is not None else ""
+    fast = " (공복 기준 수치로 판정)" if e["item"] == "공복혈당" else ""
+    return f"{head}{calc}: {e['band']} 구간 (기준 {e['range_text']}){fast}"
+
+
+def _has_number(line: str, value) -> bool:
+    """줄에 값이 숫자 경계 기준으로 정확히 있는지 확인한다 (예: 12는 120과 일치하지 않는다)."""
+    if not isinstance(value, (int, float)):
+        return str(value) in line
+    return re.search(r"(?<![\d.])" + re.escape(f"{value:g}") + r"(?:\.0+)?(?!\d|\.\d)", line) is not None
+
+
+def _line_covers(line: str, e: dict) -> bool:
+    """모델이 쓴 줄이 요약 줄을 대신할 수 있는지: 이름·값·구간·기준 표기·성별·공복 문구가 모두 있어야 한다."""
+    if not any(n in line for n in _item_names({"item": e["item"]})) or not _has_number(line.replace(e["range_text"], " ") if e["range_text"] else line, e["value"]):
+        return False
+    if e["status"] != "판정":
+        return any(w in line for w in _HOLD_WORDS)
+    if e["band"] not in line or e["range_text"] not in line or (e["unit"] and e["unit"] not in line):
+        return False
+    if e["sex"] and not re.search(rf"(?<![가-힣]){e['sex']}(?:성|자)?(?![가-힣])", line):
+        return False
+    return e["item"] != "공복혈당" or "공복 기준" in line
 
 
 def ensure_summary(answer: str, trace: list) -> str:
-    """판정 요약 한 줄을 코드가 보장한다: 항목 이름·입력값·단위·구간·기준 원문 표기가 한 줄에 없으면 요약 줄을 덧붙인다."""
-    latest: dict[str, dict] = {}
-    for r in _judge_results(trace):
-        latest[str(r.get("item"))] = r
-    bmi = next((s["bmi"] for s in reversed([_loads(x) for x in trace if x.get("step") == "calc_bmi"])
-                if s.get("bmi") is not None), None)
+    """판정 요약 한 줄을 코드가 보장한다: 결과마다 요약 줄이 답에 없으면 판정 도구 결과로 만든 줄을 덧붙인다."""
     lines = answer.split("\n")
-    missing = []
-    for r in latest.values():
-        for line, need in _summary_entries(r, bmi):
-            if r.get("status") != "판정":
-                if not any(n in l and any(w in l for w in _HOLD_WORDS) for l in lines for n in _item_names(r)):
-                    missing.append(line)
-                continue
-            name, val, band, rng = need.split("\n")
-            unit = r.get("unit") or ""
-            if not any(name in l and val in l and band in l and rng in l and (not unit or unit in l)
-                       and (name != "공복혈당" or "공복 기준" in l) for l in lines):
-                missing.append(line)
+    missing = [_summary_line(e) for e in _summary_items(trace) if not any(_line_covers(l, e) for l in lines)]
     if not missing:
         return answer
     return answer + "\n\n[판정 요약]\n" + "\n".join(missing)
