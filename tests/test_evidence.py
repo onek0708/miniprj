@@ -58,6 +58,22 @@ def test_no_duplicate_when_already_cited():
     assert out == ans
 
 
+def test_unsupported_exam_drops_unrelated_guides_and_skips_search(monkeypatch):
+    called = []
+    monkeypatch.setattr(agent, "retrieve_guides", lambda q: called.append(q) or ([], {}))
+    ctxs = [{"doc_id": "guides/blood_pressure.md#혈압 - 재검사", "text": "t"}]
+    out, ctx = agent.ensure_evidence("다루지 않는 검사입니다.", "위암 검진 결과가 이상 소견이래요 어떻게 해석해요", ctxs, [])
+    assert ctx == [] and called == [] and out == "다루지 않는 검사입니다."
+
+
+def test_only_guides_matching_judged_items_are_kept():
+    r = judge_checkup_item("공복혈당", 110, "mg/dL", "남", True)
+    ctxs = [{"doc_id": "guides/blood_sugar.md#혈당 - 식습관", "text": "t"},
+            {"doc_id": "guides/blood_pressure.md#혈압 - 재검사", "text": "t"}]
+    _, ctx = agent.ensure_evidence("경계입니다.", "공복혈당 110", ctxs, _trace(r))
+    assert [c["doc_id"] for c in ctx] == ["guides/blood_sugar.md#혈당 - 식습관"]
+
+
 def test_hold_only_has_no_source_note():
     r = judge_checkup_item("공복혈당", 9999, "mg/dL", "남", True)
     out, ctx = agent.ensure_evidence("보류.", "공복혈당 9999", [], _trace(r))

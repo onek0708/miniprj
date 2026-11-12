@@ -61,19 +61,24 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 모델은 Bedrock `global.anthropic.claude-sonnet-4-6`(리전 `ap-northeast-2`)입니다. 강의 고정값 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이 일일 토큰 한도에 걸려 바꿨습니다(`src/agent.py`의 `_invoke_agent`에서 바꿀 수 있음). 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
-| 지표 | 값 | 계산 대상 문항 수 |
+| 지표 | 최종 값 (17건) | 개선 전 (13건) |
 |---|---|---|
-| context_recall | 0.250 | 13 |
-| context_precision | 0.684 | 13 |
-| faithfulness | 0.232 | 13 |
-| answer_relevancy | 0.516 | 13 |
+| context_recall | 0.679 | 0.250 |
+| context_precision | 0.978 | 0.684 |
+| faithfulness | 0.455 | 0.232 |
+| answer_relevancy | 0.412 | 0.516 |
 
-- 측정: `python evaluation/run_ragas.py` (ragas 0.4.3), 원본 수치는 `evaluation/results/ragas_round2.json`에 있습니다.
+- 측정: `python evaluation/run_ragas.py` (ragas 0.4.3). 원본 수치는 `evaluation/results/ragas_round2_improved.json`(최종)과 `ragas_round2.json`(개선 전)에 있습니다.
+- 개선 내용:
+  - 측정 방식: RAGAS 근거에 코드 판정 결과와 판정 기준(`criteria.json`)을 더했습니다. 서비스 응답의 `contexts`는 그대로입니다.
+  - 검색 정확도: 질문 주제와 맞지 않는 지침 조각을 빼는 필터를 넣었습니다(`src/agent.py`).
+- 최종 측정에서 제외한 문항은 3건입니다(#9, #11, #18). 다루지 않는 검사, 수치 없음, 약 요청 차단이라 근거가 하나도 없는 문항입니다.
+- answer_relevancy는 질문과 답만으로 계산해 이번 수정과 직접 관계가 없습니다. 판정을 하지 않는 답(#12, #17)이 0점으로 들어갔고, 다시 실행하면서 답 문장이 바뀐 문항도 있어 내려갔습니다.
 - 심판 모델: `global.anthropic.claude-sonnet-4-6`(ap-northeast-2). 임베딩: `amazon.titan-embed-text-v2:0`.
 - 모범 답안: `test_queries.csv`의 `reference` 열입니다. `criteria.json`과 지침 문서를 근거로 작성했습니다.
 - 통과 기준 없이 숫자만 기록합니다.
-- 계산 규칙(7.4): `answer`와 `contexts`로 계산하고, `contexts`가 빈 문항은 대상에서 빼고 그 수를 적습니다. 이번에는 20문항 중 7건을 뺐습니다(#2, #8, #11, #12, #14, #17, #18).
-- faithfulness·context_recall이 낮은 이유: 판정 구간은 코드 판정 결과로 답에 들어가는데, RAGAS `contexts`에는 지침 문서 조각만 들어가기 때문입니다. 자세한 해석은 `evaluation/round2_report.md`의 "RAGAS 측정" 절을 봅니다.
+- 계산 규칙(7.4): `answer`와 근거로 계산하고, 근거가 빈 문항은 대상에서 빼고 그 수를 적습니다.
+- 자세한 해석과 문항별 비교는 `evaluation/round2_report.md`의 "RAGAS 측정"과 "RAGAS 개선 후 재측정" 절을 봅니다.
 
 ## 6. 인-아웃 세트 통과율
 고정 20문항(positive 8, negative 4, edge 5, guardrail 3).
@@ -94,7 +99,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 - 실패한 접근 3 — 가드 차단을 모델에 맡기기: 모델 기분에 따라 달라질 수 있어 정규식·키워드 기반 코드 가드로 정했습니다.
 - 환경 문제: 첫 측정은 AWS 자격 증명 없음, 다음은 의존성 미설치, 그다음은 일일 토큰 한도로 막혀 코드 개선 효과를 충분히 재지 못했습니다. 다음에는 평가 전에 자격 증명·의존성·한도를 먼저 점검합니다.
 - 실패한 접근 4 — 성능이 낮은 모델로 바꾸기: 한도를 피하려고 Haiku 4.5로 바꿨더니 판정 도구를 부르지 않고 성별을 되물어 11/20에 그쳤습니다. Sonnet 계열의 다른 추론 프로필·리전(Sonnet 4.6, 서울)으로 바꿔 해결했습니다.
-- 남은 한계: 강의 고정 모델(Sonnet 4.5)로는 20문항을 끝까지 재지 못했습니다. RAGAS는 측정했지만, 판정 근거가 `contexts`에 들어가지 않아 faithfulness·context_recall이 낮게 나옵니다.
+- 남은 한계: 강의 고정 모델(Sonnet 4.5)로는 20문항을 끝까지 재지 못했습니다. RAGAS faithfulness(0.455)와 answer_relevancy(0.412)는 아직 낮고, answer_relevancy는 실행마다 답 문장이 달라져 편차가 큽니다. 검색 설정(k, 키워드·벡터 비중)은 아직 RAGAS로 비교해 고르지 않았습니다.
 
 ## 8. 핵심 코드 위치
 - `src/agent.py`: `run_query`(진입·면책), 출력 가드(`ensure_band_consistency`, `ensure_evidence`, `ensure_referral`, `ensure_assumptions`), `_build_tools`

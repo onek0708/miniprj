@@ -29,17 +29,75 @@ EMBED_REGION = "us-east-1"
 METRIC_NAMES = ["context_recall", "context_precision", "faithfulness", "answer_relevancy"]
 
 
+CRITERIA = json.loads((ROOT / "data" / "criteria.json").read_text(encoding="utf-8"))
+
+
+def _criteria_text(item: str) -> str:
+    """criteria.json에서 항목의 판정 구간·출처를 한 문단으로 만든다."""
+    spec = next((s for s in CRITERIA["항목"] if s["항목"] == item), None)
+    if spec is None:
+        return ""
+    def bands(intervals):
+        return ", ".join(f"{iv['구간']} {iv['원문표기']}" for iv in intervals)
+    if spec["성별구분"]:
+        body = " / ".join(f"{sex}성: {bands(ivs)}" for sex, ivs in spec["성별구간"].items())
+    else:
+        body = bands(spec["구간"])
+    src = CRITERIA["출처"]
+    note = f" 비고: {spec['비고']}." if spec.get("비고") else ""
+    return (f"[판정 기준] {item}({spec['단위']}) {body}.{note} "
+            f"출처: {src['기관']} 「{src['문서']}」, 기준일 {src['기준일']}.")
+
+
+def _judgment_evidence(trace: list) -> list[str]:
+    """trace의 코드 판정·계산 결과와 해당 항목의 판정 기준을 RAGAS 근거 문장으로 만든다.
+
+    서비스 응답의 contexts(지침 검색 결과)는 그대로 두고, 평가할 때만 답의 실제 근거인
+    코드 판정 결과(criteria.json)를 더한다.
+    """
+    texts = []
+    for step in trace:
+        name = step.get("step")
+        if name not in ("judge_checkup_item", "calc_bmi"):
+            continue
+        try:
+            r = json.loads(step["output"])
+        except (TypeError, ValueError):
+            continue
+        if name == "calc_bmi":
+            texts.append(f"[계산 결과] 체질량지수 = 몸무게(kg) ÷ 키(m)², 계산값 {r.get('bmi')} kg/m².")
+            continue
+        assume = f" 가정·환산: {'; '.join(r['assumptions'])}." if r.get("assumptions") else ""
+        unit = r.get("unit") or ""
+        if r.get("status") != "판정":
+            texts.append(f"[판정 보류] {r.get('item')} {r.get('value')}{unit}: {r.get('reason', '')}{assume}")
+            continue
+        if r.get("by_sex"):
+            result = ", ".join(f"{s} 기준 {v.get('band')}({v.get('range', '')})"
+                               for s, v in r["by_sex"].items() if v.get("status") == "판정")
+        else:
+            result = f"{r.get('band')}({r.get('range', '')})"
+        texts.append(f"[판정 결과] {r.get('item')} {r.get('value')}{unit} → {result}.{assume}")
+        crit = _criteria_text(r.get("item", ""))
+        if crit and crit not in texts:
+            texts.append(crit)
+    return texts
+
+
 def collect_samples(rows: list) -> tuple[list, list]:
-    """문항마다 run_query를 실행해 RAGAS 표본을 만들고, contexts가 빈 문항 id는 따로 모은다."""
+    """문항마다 run_query를 실행해 RAGAS 표본을 만들고, 근거가 하나도 없는 문항 id는 따로 모은다."""
     samples, excluded = [], []
     for row in rows:
         res = run_query(row["input"])
-        texts = [c["text"] for c in res.get("contexts", []) if isinstance(c, dict) and c.get("text")]
+        guides = [c["text"] for c in res.get("contexts", []) if isinstance(c, dict) and c.get("text")]
+        judged = _judgment_evidence(res.get("trace", []))
+        texts = judged + guides
         if not texts:
             excluded.append(row["id"])
             continue
         samples.append({"id": row["id"], "user_input": row["input"], "response": str(res["answer"]),
-                        "retrieved_contexts": texts, "reference": row["reference"]})
+                        "retrieved_contexts": texts, "reference": row["reference"],
+                        "n_guides": len(guides), "n_judgment": len(judged)})
     return samples, excluded
 
 

@@ -166,6 +166,35 @@ def ensure_assumptions(answer: str, trace: list) -> str:
 
 NO_GUIDE = "근거 지침 없음"
 _GUIDE_WORDS = ("지침", "생활습관", "관리", "식습관", "운동", "음식", "어떻게", "줄이", "개선")
+# 항목을 특정하지 않아도 생활습관을 직접 묻는 말 (예: "식습관 지침")
+_LIFESTYLE_WORDS = ("지침", "생활습관", "식습관", "운동", "음식")
+# 지침 문서별 주제 단어: 질문이나 판정 항목에 이 단어가 있어야 그 문서 조각을 근거로 쓴다
+_GUIDE_TOPICS = {
+    "blood_pressure.md": ("혈압",),
+    "blood_sugar.md": ("혈당", "당뇨"),
+    "lipids.md": ("콜레스테롤", "중성지방", "지질", "HDL", "LDL"),
+    "obesity.md": ("체질량지수", "BMI", "비만", "체중", "몸무게", "허리둘레", "복부"),
+    "liver.md": ("간 기능", "간기능", "간수치", "간 수치", "AST", "ALT", "감마", "지티피", "GTP", "지방간"),
+    "anemia.md": ("혈색소", "빈혈", "헤모글로빈"),
+}
+
+
+def _relevant_guides(question: str, judged: list[dict]) -> set:
+    """질문과 판정 항목 이름에 나온 주제 단어로 관련 지침 문서 파일명을 고른다."""
+    text = question + " " + " ".join(str(r.get("item", "")) for r in judged)
+    return {name for name, words in _GUIDE_TOPICS.items() if any(w in text for w in words)}
+
+
+def _keep_relevant(contexts: list, topics: set, lifestyle: bool) -> list:
+    """관련 없는 지침 조각을 근거에서 뺀다 (예: 갑상선·위암 검진 질문에 혈압 지침이 붙는 문제).
+
+    주제를 알 수 있으면 그 문서 조각만 남기고, 주제 없이 생활습관만 물으면 그대로 두고,
+    둘 다 아니면(다루지 않는 검사 등) 모두 뺀다.
+    """
+    if topics:
+        return [c for c in contexts if not (isinstance(c, dict) and "doc_id" in c)
+                or c["doc_id"].split("#")[0].split("/")[-1] in topics]
+    return list(contexts) if lifestyle else []
 
 
 def _judge_results(trace: list) -> list[dict]:
@@ -194,8 +223,11 @@ def ensure_evidence(answer: str, question: str, contexts: list, trace: list) -> 
     """근거 표기를 코드로 보장한다: 판정 기준 출처, 지침 contexts·출처, 검색 0건이면 '근거 지침 없음'."""
     judged = [r for r in _judge_results(trace) if r.get("status") == "판정"]
     flagged = _flagged_items(judged)
-    asks_guide = any(w in question for w in _GUIDE_WORDS)
-    contexts = list(contexts)
+    topics = _relevant_guides(question, judged)
+    lifestyle = any(w in question for w in _LIFESTYLE_WORDS)
+    searchable = bool(topics) or lifestyle  # 주제를 알 수 없는 질문(다루지 않는 검사 등)은 지침을 찾지 않는다
+    asks_guide = searchable and any(w in question for w in _GUIDE_WORDS)
+    contexts = _keep_relevant(contexts, topics, lifestyle)
     notes = []
     if (flagged or asks_guide) and not contexts:  # 모델이 검색을 빠뜨렸으면 코드가 직접 검색한다
         query = " ".join(flagged) + " " + question if flagged else question
@@ -203,7 +235,7 @@ def ensure_evidence(answer: str, question: str, contexts: list, trace: list) -> 
             chunks, _ = retrieve_guides(query)
         except Exception:
             chunks = []
-        contexts = [{"doc_id": c["doc_id"], "text": c["text"]} for c in chunks]
+        contexts = _keep_relevant([{"doc_id": c["doc_id"], "text": c["text"]} for c in chunks], topics, lifestyle)
         trace.append({"step": "retrieve_guides", "input": query, "output": f"문서 {len(contexts)}건 (코드 보충 검색)"})
     if judged:
         src, base = judged[0]["source"], judged[0]["base_date"]
