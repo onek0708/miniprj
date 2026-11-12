@@ -339,3 +339,18 @@
 - 20/20 표기 점검: README·리포트의 모든 `20/20`에 같은 문장·같은 행에서 judge 도입 전 채점 기준임을 표시했다(`grep -n "20/20"`로 확인, 이번 기록에서 표시가 빠진 4곳 보완). 현재 채점 기준(judge 도입 후) 수치는 14/20(70%), guardrail 3/3이다.
 - 수치 출처: README 통과율 표와 이 리포트의 14/20은 모두 `final_eval_llm_judge.json`(커밋 ad0a4d7, judge 도입 후)에서 나왔고, 20/20은 `final_eval_sonnet_order.json`(커밋 42c6d07, judge 도입 전) 등 이전 결과 파일에서 나왔다.
 - 위 관찰 후 이 기록을 쓰는 커밋은 README·리포트만 바꾸는 문서 전용 커밋이다.
+
+### README·리포트 수치 표기 점검 (관찰, 커밋 6a757dd 이후 실행)
+
+`20/20`과 `N/20` 통과율 표기마다 judge 도입 전/후 채점 기준을 같은 문장·같은 행·같은 표 머리글에서 밝혔다. 아래 명령을 마지막 커밋(6a757dd4853418b92b9c1ccdd9911d694a6d3c40) 뒤에 실제로 실행했다.
+
+| 명령 | 출력(원문) | 종료 코드 | 해석 |
+|---|---|---|---|
+| `grep -n "20/20" README.md \| grep -v "judge 도입 전\|judge 도입 후\|현재 채점 기준\|현재 기준"` | (출력 없음) | 1 | 기준 표기가 없는 `20/20`이 README에 없다 |
+| `grep -n "20/20" evaluation/round2_report.md \| grep -v "judge 도입 전\|judge 도입 후\|현재 채점 기준\|현재 기준"` | (출력 없음) | 1 | 리포트에도 없다 |
+| `git diff --quiet 7a35225 -- data/criteria.json evaluation/test_queries.csv SERVICE.md src` | (출력 없음) | 0 | 기준·문항·서비스 무변경 |
+| `git ls-files .env` / `git log --all --format=%H -- .env` | (출력 없음) | 0 / 0 | .env 미추적, 이력 없음 |
+| `git status --porcelain` (이 기록 작성 전) | (출력 없음) | 0 | 깨끗함 |
+
+- 리포트 41~44행(A~D 측정)은 표 머리글에 "모든 행 judge 도입 전 채점 기준"을 적어 표기했다. README 표의 1차·2차·최종 확인 1·2 행도 행마다 표기했다.
+- judge 도입 후 수치는 README(최종 확인 4)와 리포트 모두 14/20(70%), guardrail 3/3, 출처 `final_eval_llm_judge.json`(커밋 ad0a4d7)으로 같다. 14/20은 Haiku 예비 모델 시기(judge 도입 전, `final_eval.json`)에도 나왔으나 별개 측정이며 각각 기준을 밝혀 적었다.
