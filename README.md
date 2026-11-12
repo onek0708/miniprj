@@ -58,7 +58,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 ```
 테스트: `python -m pytest -q tests`, 평가: `python evaluation/run_eval.py --out evaluation/results/round2.json`
 
-모델은 Bedrock `global.anthropic.claude-sonnet-4-6`(리전 `ap-northeast-2`)입니다. 강의 고정값 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이 일일 토큰 한도에 걸려 바꿨습니다(`src/agent.py`의 `_invoke_agent`에서 바꿀 수 있음). 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
+모델은 Bedrock의 10단계 (리전, 모델 ID) 순서입니다(`src/agent.py`의 모듈 상수 목록 하나이며 RAGAS 심판 `evaluation/run_ragas.py`도 같은 목록을 씁니다). 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 서비스는 그 질문을, RAGAS는 그 회차를 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 trace의 `llm_model` 단계와 결과 파일에 남습니다. Haiku·Nova·gpt-oss는 쓰지 않습니다. AWS 자격 증명은 `.env`에서 읽고 `AWS_DEFAULT_REGION`은 모델 순서와 무관한 기본값입니다. 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
 | 지표 | 최종 값 (17건) | 개선 전 (13건) |
@@ -74,7 +74,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
   - 검색 정확도: 질문 주제와 맞지 않는 지침 조각을 빼는 필터를 넣었습니다(`src/agent.py`).
 - 최종 측정에서 제외한 문항은 3건입니다(#9, #11, #18). 다루지 않는 검사, 수치 없음, 약 요청 차단이라 근거가 하나도 없는 문항입니다.
 - answer_relevancy는 질문과 답만으로 계산해 이번 수정과 직접 관계가 없습니다. 판정을 하지 않는 답(#12, #17)이 0점으로 들어갔고, 다시 실행하면서 답 문장이 바뀐 문항도 있어 내려갔습니다.
-- 심판 모델: `global.anthropic.claude-sonnet-4-6`(ap-northeast-2). 임베딩: `amazon.titan-embed-text-v2:0`.
+- 심판 모델: 위 4절의 10단계 모델 순서(회차 단위로 넘어가며 결과 파일에 회차별 채점 모델·리전 기록). 당시 측정은 Sonnet 4.6(ap-northeast-2 global)으로 했습니다. 임베딩: `amazon.titan-embed-text-v2:0`.
 - 모범 답안: `test_queries.csv`의 `reference` 열입니다. `criteria.json`과 지침 문서를 근거로 작성했습니다.
 - 통과 기준 없이 숫자만 기록합니다.
 - 계산 규칙(7.4): `answer`와 근거로 계산하고, 근거가 빈 문항은 대상에서 빼고 그 수를 적습니다.
@@ -87,10 +87,14 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 |---|---|---|
 | 1차 | 6/20 (30%) | 0/3 |
 | 2차 | 7/20 (35%) → 의존성 설치 후 재측정 8/20 (40%) | 1/3 |
-| 2차 재측정 (자격 증명 보완, Sonnet 4.6, #16 수정) | **20/20 (100%)** | **3/3** |
+| 2차 재측정 (자격 증명 보완, Sonnet 4.6, #16 수정) | 20/20 (100%) | 3/3 |
+| 최종 확인 1·2 (Haiku 예비 모델, `final_eval.json`·`final_eval_retry.json`) | 14/20 (70%), 판정 오류 11건 | 2/3 |
+| 최종 확인 3 (10단계 모델 순서, `final_eval_sonnet_order.json`, 커밋 42c6d07) | **20/20 (100%)**, 판정 오류 0건 | **3/3** |
+
+- 최신 결과(2026-11-12): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3. #1~#17·#19·#20은 `global.anthropic.claude-sonnet-4-6`(us-west-2)가 답했고 #18은 모델 호출이 없었습니다.
 
 - 개선폭: 1차 6/20 → 최종 20/20. 2차 당시에는 #18 하나(채점기 `용량` 오탐 수정)만 통과로 바뀌었고, 나머지는 자격 증명 보완과 모델 변경 후 통과했습니다. 마지막 #16은 프롬프트 정제(성별을 되묻지 않기)와 채점기의 남녀 표기 인정으로 통과했습니다. 측정별 자세한 내용은 `evaluation/round2_report.md`의 "추가 재측정"을 봅니다.
-- 목표(전체 90%, guardrail 100%)는 재측정에서 달성했습니다. 단, 강의 고정 모델(Sonnet 4.5)이 아니라 Sonnet 4.6으로 잰 결과입니다.
+- 목표(전체 90%, guardrail 100%)는 재측정에서 달성했습니다. 최신 20/20은 10단계 모델 순서로 잰 결과이며 실제로는 Sonnet 4.6이 답했습니다.
 - 기능 성공 기준 10개와 단위 테스트는 `tests/`에서 확인합니다. 리포트: `evaluation/round1_report.md`, `evaluation/round2_report.md`.
 
 ## 7. 트라이앤에러 회고
@@ -98,14 +102,14 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 - 실패한 접근 2 — 금지어 포함 여부로 채점: 올바른 거절 문구 속 '용량'을 위반으로 오탐했습니다(#18). 최종은 숫자+단위 형태의 실제 복용량 안내만 위반으로 봅니다. 답이 아니라 기준이 틀렸던 경우였습니다.
 - 실패한 접근 3 — 가드 차단을 모델에 맡기기: 모델 기분에 따라 달라질 수 있어 정규식·키워드 기반 코드 가드로 정했습니다.
 - 환경 문제: 첫 측정은 AWS 자격 증명 없음, 다음은 의존성 미설치, 그다음은 일일 토큰 한도로 막혀 코드 개선 효과를 충분히 재지 못했습니다. 다음에는 평가 전에 자격 증명·의존성·한도를 먼저 점검합니다.
-- 실패한 접근 4 — 성능이 낮은 모델로 바꾸기: 한도를 피하려고 Haiku 4.5로 바꿨더니 판정 도구를 부르지 않고 성별을 되물어 11/20에 그쳤습니다. Sonnet 계열의 다른 추론 프로필·리전(Sonnet 4.6, 서울)으로 바꿔 해결했습니다.
-- 남은 한계: 강의 고정 모델(Sonnet 4.5)로는 20문항을 끝까지 재지 못했습니다. RAGAS faithfulness(0.455)와 answer_relevancy(0.412)는 아직 낮고, answer_relevancy는 실행마다 답 문장이 달라져 편차가 큽니다. 검색 설정(k, 키워드·벡터 비중)은 아직 RAGAS로 비교해 고르지 않았습니다.
+- 실패한 접근 4 — 성능이 낮은 모델로 바꾸기: 한도를 피하려고 Haiku 4.5로 바꿨더니 판정 도구를 부르지 않고 성별을 되물어 11/20에 그쳤습니다(초기 시도). 이후 Sonnet 4.6 주 모델 + Haiku 4.5 예비 모델 방식도 시도했으나 최종 평가가 두 번 모두 14/20(guardrail 2/3, 판정 오류 11건)이었습니다. 주 모델이 한도에 걸려 대부분 Haiku가 답했고, 실패 문항(#2, #3, #4, #7, #16, #20)은 판정 도구를 부르지 않아 trace에 판정이 없었습니다. Haiku 예비 모델을 되돌리고 Sonnet 4.6 5개 → Sonnet 4.5 5개의 10단계 모델 순서로 바꿔 20/20을 회복했습니다.
+- 남은 한계: 강의 고정 모델(Sonnet 4.5)은 6~10차 대체로만 두었고 최종 평가에서는 쓰이지 않았습니다. RAGAS faithfulness(0.455)와 answer_relevancy(0.412)는 아직 낮고, answer_relevancy는 실행마다 답 문장이 달라져 편차가 큽니다. 검색 설정(k, 키워드·벡터 비중)은 아직 RAGAS로 비교해 고르지 않았습니다.
 
 ## 7-1. 2차 개선 1단계: 검색 설정 비교와 모델 설정 변경
 - 고른 검색 설정: k=3, 같은 비중 RRF 1/(60+순위) 유지(코드 변경 없음). 수치 목표는 두지 않았다.
 - 비교 결과 요약(context_recall·context_precision 평균, 11문항, 조합마다 2회, Sonnet 4.6 채점): k=2 0.5303, k=3(기준선) 0.5183, k=5 0.5450, 키워드 0.7:벡터 0.3 0.5057. 키워드 0.3:벡터 0.7은 2회차를 예비 모델이 채점해 직접 비교가 불가해 채택하지 않았다. k=5와의 차이(0.0267)는 2회 편차(0.0289) 안이라 기준선을 유지했다. 자세한 표와 한계는 `evaluation/round2_report.md`.
 - 측정 방법: 기준 설정으로 서비스를 한 번만 돌려 저장한 검색 질문문으로 검색 함수만 다시 실행해 검색 지표 두 개만 쟀다(답변 재생성 제거, 호출량 감소).
-- 모델 설정 변경: 서비스와 RAGAS 심판 모두 `us-west-2`, 주 모델 `us.anthropic.claude-sonnet-4-6`, 예비 모델 `us.anthropic.claude-haiku-4-5-20251001-v1:0`. 이유는 기존 서울 리전 global 모델과 us-east-1이 Bedrock 일일 토큰 한도에 걸려 측정이 중단됐기 때문이며, 주 모델이 한도에 걸리면 예비 모델로 넘어가 중단 없이 진행한다(서비스는 질문 단위, RAGAS는 회차 단위).
+- 모델 설정 변경(이력): 이 단계에서는 `us-west-2` 주 모델 `us.anthropic.claude-sonnet-4-6` + Haiku 4.5 예비 모델로 바꿨다(서울 리전 global 모델과 us-east-1이 일일 토큰 한도에 걸려 측정이 중단됐기 때문). 이 Haiku 예비 모델 설정은 최종 확인에서 14/20이 나와 되돌렸고, 현재는 4절의 10단계 모델 순서가 서비스와 RAGAS 심판에 적용된다. 서비스는 질문 단위, RAGAS는 회차 단위로 넘어간다. 아래 측정 결과(k=3 유지, 벡터 우선 회차의 채점 모델 섞임)는 당시 설정 기준 기록이며 다시 측정하지 않았다.
 
 ## 8. 핵심 코드 위치
 - `src/agent.py`: `run_query`(진입·면책), 출력 가드(`ensure_band_consistency`, `ensure_evidence`, `ensure_referral`, `ensure_assumptions`), `_build_tools`
