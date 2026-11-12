@@ -499,3 +499,12 @@ judge_checkup_item('혈색소', 12.5)            -> band None, by_sex {'남': {.
 
 ### 사람 확인 필요 목록 (최신 평가)
 없음. 결과 파일 `human_check_ids`가 비어 있고 판정 오류·judge 위반도 0건이다. 이전 점수(14/20 등)는 위 요약과 각 절에 그대로 남아 있다.
+
+### 단위 테스트 최종 경계 재확인 (최종 코드 커밋 e974e5e)
+
+최종 코드 커밋은 `src/`·`tests/`를 마지막으로 바꾼 `e974e5e`(ensure_summary 결과 단위 재구성)다. 이후 커밋(`f32c0f1`)은 리포트만 바꾸며 `git diff e974e5e HEAD -- src tests`가 비어 있다. 이전 세대 통과를 이어받지 않고 `git worktree add --detach <임시경로> e974e5e`로 깨끗한 작업 트리(`git status --short` 0줄)를 체크아웃해 저장소 루트에서 `.venv` 파이썬으로 `python -m pytest`를 다시 실행했다(2026-11-12, Bedrock 호출 없음). 검증 상태: 관찰(verified_at_final_commit).
+
+- 명령: `python -m pytest` (저장소 루트, 커밋 `e974e5e`)
+- 출력 요약: `233 passed in 38.08s` (실패 0, 오류 0)
+- 판정 요약 별도 테스트(`tests/test_summary_line.py`, 18개 통과): 성별 지정 호출 두 번 `test_sex_specified_calls_give_one_tagged_line_each`, 한 항목 두 값 `test_same_item_different_values_both_summarized_and_duplicates_merged`, 12/120 부분 일치 함정 `test_value_substring_is_not_a_match`, '100 ~ 125' 모델 줄 거부 `test_model_line_with_only_loose_range_is_not_accepted`, 면책 마지막 줄 `test_disclaimer_stays_last_line`, 보류 전용 경로 `tests/test_unjudgeable.py::test_hold_only_without_guide_writes_tool_reason_and_consult`.
+- 그 밖: `test_temperature.py`, `test_guards_drug.py`, `test_guard_step.py`, `test_judge_phrases.py`, `test_unjudgeable.py`(적용 조건 경계 포함)도 모두 통과.
