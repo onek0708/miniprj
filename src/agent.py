@@ -25,6 +25,8 @@ SYSTEM_PROMPT = (
     "judge_checkup_item(필요하면 calc_bmi)을 호출하고, 경계·질환의심이거나 지침을 묻는 경우 "
     "retrieve_guides로 지침을 검색해 근거와 함께 설명한다. 판정 구간은 도구 결과 그대로 쓰고 직접 판단하지 않는다. "
     "수치 없는 결과지 표기(정상A 등)나 수축기·이완기 구분 없는 혈압 단일값도 judge_checkup_item에 그대로 넘겨 보류로 안내하고, 보류 항목에는 구간을 쓰지 않는다. 일부만 보류돼도 나머지 항목은 판정한다. "
+    "성별이나 공복 여부가 질문에 없어도 사용자에게 되묻지 말고 해당 값을 비운 채 바로 judge_checkup_item을 호출한다. "
+    "성별 구분 항목은 도구가 돌려준 남녀 기준 결과를 둘 다 그대로 안내한다. "
     "진단명을 단정하거나 약·용량을 말하지 않는다. 질환의심이면 의료기관 진료를 안내한다."
 )
 
@@ -289,8 +291,8 @@ def _invoke_agent(question: str) -> dict:
 
     load_dotenv()
     rec = _Recorder()
-    # us. 추론 프로필이 일일 토큰 한도에 걸려 같은 Sonnet 4.5의 global. 추론 프로필로 호출한다
-    model = ChatBedrockConverse(model="global.anthropic.claude-sonnet-4-5-20250929-v1:0", region_name="us-east-1")
+    # Sonnet 4.5 일일 토큰 한도로 Sonnet 4.6(서울 리전 global 추론 프로필)으로 교체 (기술 스택 고정값과 다름)
+    model = ChatBedrockConverse(model="global.anthropic.claude-sonnet-4-6", region_name="ap-northeast-2")
     agent = create_agent(model, _build_tools(rec), system_prompt=SYSTEM_PROMPT)
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
     answer = ensure_band_consistency(result["messages"][-1].text, rec.trace)  # 구간 표기는 코드 판정과 대조한다

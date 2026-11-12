@@ -58,7 +58,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 ```
 테스트: `python -m pytest -q tests`, 평가: `python evaluation/run_eval.py --out evaluation/results/round2.json`
 
-모델은 Bedrock `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(리전 `us-east-1`), 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
+모델은 Bedrock `global.anthropic.claude-sonnet-4-6`(리전 `ap-northeast-2`)입니다. 강의 고정값 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이 일일 토큰 한도에 걸려 바꿨습니다(`src/agent.py`의 `_invoke_agent`에서 바꿀 수 있음). 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
 | 지표 | 값 | 계산 대상 문항 수 |
@@ -70,7 +70,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 
 - 측정하지 못한 이유: 2차 재측정 때 Bedrock `ThrottlingException: Too many tokens per day`(일일 토큰 한도 소진)로 대부분의 문항이 고정 안내 문구로 끝나, 모델 답과 `contexts`가 함께 나온 문항이 거의 없습니다. 이 한도에서 심판 모델 호출까지 더해 RAGAS를 돌릴 수 없었고, 숫자를 지어내지 않았습니다.
 - 계산 규칙(7.4): `answer`와 `contexts`로 계산하고, `contexts`가 빈 문항(정상만 있는 답, 차단, 없는 정보)은 대상에서 빼고 그 수를 리포트에 적습니다.
-- 토큰 한도가 풀린 뒤 3차에서 측정합니다. 자세한 내용은 `evaluation/round2_report.md`를 봅니다.
+- 이후 모델을 바꿔 인-아웃 세트는 20/20으로 다시 쟀지만(6장), RAGAS는 아직 돌리지 않았습니다. 자세한 내용은 `evaluation/round2_report.md`를 봅니다.
 
 ## 6. 인-아웃 세트 통과율
 고정 20문항(positive 8, negative 4, edge 5, guardrail 3).
@@ -79,9 +79,10 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 |---|---|---|
 | 1차 | 6/20 (30%) | 0/3 |
 | 2차 | 7/20 (35%) → 의존성 설치 후 재측정 8/20 (40%) | 1/3 |
+| 2차 재측정 (자격 증명 보완, Sonnet 4.6, #16 수정) | **20/20 (100%)** | **3/3** |
 
-- 개선폭: 1차 대비 +1건(+5%p). 통과로 바뀐 문항은 #18 하나이며, 원인은 채점기의 `용량` 단어 오탐(기타: 채점 기준 수정)입니다. 검색 품질·프롬프트 정제로 통과로 바뀐 문항은 없습니다.
-- 목표(전체 90%, guardrail 100%)는 달성하지 못했습니다. 남은 실패 대부분은 Bedrock 자격 증명 부재와 일일 토큰 한도 탓이며, #19는 차단 응답에 같은 질문 속 수치 판정이 빠진 문제로 남아 있습니다.
+- 개선폭: 1차 6/20 → 최종 20/20. 2차 당시에는 #18 하나(채점기 `용량` 오탐 수정)만 통과로 바뀌었고, 나머지는 자격 증명 보완과 모델 변경 후 통과했습니다. 마지막 #16은 프롬프트 정제(성별을 되묻지 않기)와 채점기의 남녀 표기 인정으로 통과했습니다. 측정별 자세한 내용은 `evaluation/round2_report.md`의 "추가 재측정"을 봅니다.
+- 목표(전체 90%, guardrail 100%)는 재측정에서 달성했습니다. 단, 강의 고정 모델(Sonnet 4.5)이 아니라 Sonnet 4.6으로 잰 결과입니다.
 - 기능 성공 기준 10개와 단위 테스트는 `tests/`에서 확인합니다. 리포트: `evaluation/round1_report.md`, `evaluation/round2_report.md`.
 
 ## 7. 트라이앤에러 회고
@@ -89,7 +90,8 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 - 실패한 접근 2 — 금지어 포함 여부로 채점: 올바른 거절 문구 속 '용량'을 위반으로 오탐했습니다(#18). 최종은 숫자+단위 형태의 실제 복용량 안내만 위반으로 봅니다. 답이 아니라 기준이 틀렸던 경우였습니다.
 - 실패한 접근 3 — 가드 차단을 모델에 맡기기: 모델 기분에 따라 달라질 수 있어 정규식·키워드 기반 코드 가드로 정했습니다.
 - 환경 문제: 첫 측정은 AWS 자격 증명 없음, 다음은 의존성 미설치, 그다음은 일일 토큰 한도로 막혀 코드 개선 효과를 충분히 재지 못했습니다. 다음에는 평가 전에 자격 증명·의존성·한도를 먼저 점검합니다.
-- 남은 한계: 90%·guardrail 100% 미확인, #19 차단 응답의 수치 판정 누락, RAGAS 네 지표 미측정, 한도 해소 후 3차에서 실패 문항을 검색 품질 / 프롬프트 정제 / 기타로 다시 분류해야 합니다.
+- 실패한 접근 4 — 성능이 낮은 모델로 바꾸기: 한도를 피하려고 Haiku 4.5로 바꿨더니 판정 도구를 부르지 않고 성별을 되물어 11/20에 그쳤습니다. Sonnet 계열의 다른 추론 프로필·리전(Sonnet 4.6, 서울)으로 바꿔 해결했습니다.
+- 남은 한계: 강의 고정 모델(Sonnet 4.5)로는 20문항을 끝까지 재지 못했습니다. RAGAS 네 지표는 아직 측정하지 않았습니다.
 
 ## 8. 핵심 코드 위치
 - `src/agent.py`: `run_query`(진입·면책), 출력 가드(`ensure_band_consistency`, `ensure_evidence`, `ensure_referral`, `ensure_assumptions`), `_build_tools`
