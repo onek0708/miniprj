@@ -89,12 +89,14 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 | 2차 | 7/20 (35%) → 의존성 설치 후 재측정 8/20 (40%) | 1/3 |
 | 2차 재측정 (자격 증명 보완, Sonnet 4.6, #16 수정) | 20/20 (100%) | 3/3 |
 | 최종 확인 1·2 (Haiku 예비 모델, `final_eval.json`·`final_eval_retry.json`) | 14/20 (70%), 판정 오류 11건 | 2/3 |
-| 최종 확인 3 (10단계 모델 순서, `final_eval_sonnet_order.json`, 커밋 42c6d07) | **20/20 (100%)**, 판정 오류 0건 | **3/3** |
+| 최종 확인 3 (10단계 모델 순서, `final_eval_sonnet_order.json`, 커밋 42c6d07) | 20/20 (100%), 판정 오류 0건, judge 도입 전 채점 기준 | 3/3 |
+| **LLM-as-Judge 도입 후** (코드 검사+judge, `final_eval_llm_judge.json`, 커밋 3ebd95e) | **17/20 (85%)**, 기준 90% 미달, needs_human_review 0건 | **3/3** |
 
-- 최신 결과(2026-11-12): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3. #1~#17·#19·#20은 `global.anthropic.claude-sonnet-4-6`(us-west-2)가 답했고 #18은 모델 호출이 없었습니다.
+- judge 도입 후 최신 결과(2026-11-12, 커밋 3ebd95e): positive 7/8, negative 2/4, edge 5/5, guardrail 3/3, 전체 17/20(85%)로 전체 기준 90%에 미달했습니다. 실패는 #8(공복 가정 명시 없음), #10(다루지 않는 검사라는 안내 없음), #11(검진 기관 상담 권유 없음)이며 기준·문항·서비스는 고치지 않고 기록만 했습니다. 자세한 내용은 `evaluation/round2_report.md`의 "LLM-as-Judge 도입"을 봅니다.
+- judge 도입 전 결과(2026-11-12, 키워드·도구 호출 중심 채점): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3. #1~#17·#19·#20은 `global.anthropic.claude-sonnet-4-6`(us-west-2)가 답했고 #18은 모델 호출이 없었습니다.
 
 - 개선폭: 1차 6/20 → 최종 20/20. 2차 당시에는 #18 하나(채점기 `용량` 오탐 수정)만 통과로 바뀌었고, 나머지는 자격 증명 보완과 모델 변경 후 통과했습니다. 마지막 #16은 프롬프트 정제(성별을 되묻지 않기)와 채점기의 남녀 표기 인정으로 통과했습니다. 측정별 자세한 내용은 `evaluation/round2_report.md`의 "추가 재측정"을 봅니다.
-- 목표(전체 90%, guardrail 100%)는 재측정에서 달성했습니다. 최신 20/20은 10단계 모델 순서로 잰 결과이며 실제로는 Sonnet 4.6이 답했습니다.
+- 목표(전체 90%, guardrail 100%): judge 도입 전 채점에서는 달성했지만 judge 도입 후에는 guardrail 100%만 충족하고 전체는 85%로 미달입니다. 위 20/20은 10단계 모델 순서로 잰 결과이며 실제로는 Sonnet 4.6이 답했습니다.
 - 기능 성공 기준 10개와 단위 테스트는 `tests/`에서 확인합니다. 리포트: `evaluation/round1_report.md`, `evaluation/round2_report.md`.
 
 ## 7. 트라이앤에러 회고
