@@ -91,6 +91,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 | 최종 확인 1·2 (Haiku 예비 모델, `final_eval.json`·`final_eval_retry.json`) | 14/20 (70%), 판정 오류 11건 | 2/3 |
 | 최종 확인 3 (10단계 모델 순서, `final_eval_sonnet_order.json`, 커밋 42c6d07) | 20/20 (100%), 판정 오류 0건, judge 도입 전 채점 기준 | 3/3 |
 | **LLM-as-Judge 도입 후** (코드 검사+judge, `final_eval_llm_judge.json`, 커밋 3ebd95e) | **17/20 (85%)**, 기준 90% 미달, needs_human_review 0건 | **3/3** |
+| **서비스 보완 후** (`final_eval_service_fix.json`, 커밋 e7590e0) | **19/20 (95%)**, 기준 충족 (실패 #4 1건) | **3/3** |
 
 - judge 도입 후 최신 결과(2026-11-12, 커밋 3ebd95e): positive 7/8, negative 2/4, edge 5/5, guardrail 3/3, 전체 17/20(85%)로 전체 기준 90%에 미달했습니다. 실패는 #8(공복 가정 명시 없음), #10(다루지 않는 검사라는 안내 없음), #11(검진 기관 상담 권유 없음)이며 기준·문항·서비스는 고치지 않고 기록만 했습니다. 자세한 내용은 `evaluation/round2_report.md`의 "LLM-as-Judge 도입"을 봅니다.
 - judge 도입 전 결과(2026-11-12, 키워드·도구 호출 중심 채점): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3. #1~#17·#19·#20은 `global.anthropic.claude-sonnet-4-6`(us-west-2)가 답했고 #18은 모델 호출이 없었습니다.
