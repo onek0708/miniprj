@@ -345,3 +345,22 @@
 
 - 리포트 41~44행(A~D 측정)은 표 머리글에 "모든 행 judge 도입 전 채점 기준"을 적어 표기했다. README 표의 1차·2차·최종 확인 1·2 행도 행마다 표기했다.
 - judge 도입 후 수치는 README(최종 확인 4)와 리포트 모두 14/20(70%), guardrail 3/3, 출처 `final_eval_llm_judge.json`(커밋 ad0a4d7)으로 같다. 14/20은 Haiku 예비 모델 시기(judge 도입 전, `final_eval.json`)에도 나왔으나 별개 측정이며 각각 기준을 밝혀 적었다.
+
+### 최종 경계 확인 기록 2 (관찰, 커밋 d856485 이후)
+
+위 기록 뒤에 `d856485`(judge --self-check 샘플 구조·일치 판정 함수 명시)가 들어와 앞 기록의 "채점 코드 커밋 = 결과 커밋" 서술이 더는 맞지 않는다. 앞 세대 기록을 근거로 삼지 않고 베이스 HEAD `d856485064742189fb71898018006fa592a81265`에서 아래 명령을 다시 실제로 실행해 출력을 그대로 옮겼다(2026-11-12). 검증 상태: 관찰(observed). 단위 테스트(`.venv`의 `python -m pytest -q`): 185 passed.
+
+| # | 명령 | 출력(원문) | 종료 코드 | 결과 |
+|---|---|---|---|---|
+| 1 | `git ls-files .env` | (출력 없음) | 0 | 빈 출력, 통과 |
+| 2 | `git log --all --format=%H -- .env` | (출력 없음) | 0 | 빈 출력, 통과 |
+| 3 | `git status --porcelain` (이 기록을 쓰기 전) | (출력 없음, 깨끗함) | 0 | 통과 |
+| 4 | `git log -1 --format=%H -- evaluation/run_eval.py evaluation/llm_judge.py` | `d856485064742189fb71898018006fa592a81265` | 0 | 채점 코드 최신 커밋 |
+| 5 | 결과 파일 `final_eval_llm_judge.json`의 `commit` 값 | `ad0a4d7` | 0 | 4번과 다름(아래 설명) |
+| 6 | `git merge-base --is-ancestor ad0a4d7 HEAD` | (출력 없음) | 0 | 결과 commit은 HEAD의 조상 |
+| 7 | `git diff --quiet ad0a4d7 HEAD -- evaluation/run_eval.py src` | (출력 없음) | 0 | 변경 없음 |
+| 8 | `git diff --quiet 7a35225 -- data/criteria.json evaluation/test_queries.csv SERVICE.md src` | (출력 없음) | 0 | 통과 |
+
+- 5번이 4번과 다른 이유: 결과(ad0a4d7로 평가)는 실제로 ad0a4d7 코드로 돌렸다. 이후 d856485가 `evaluation/llm_judge.py`의 `--self-check` 샘플·일치 판정 부분(`git diff ad0a4d7 d856485 -- evaluation/llm_judge.py`의 변경 구간이 133행 이후 한 곳뿐)과 `tests/test_llm_judge.py`만 바꿨다. `judge_answer`와 `run_eval.py`는 변경 없음(7번). 그래서 최종 20문항 결과는 다시 돌리지 않았고, 결과 commit(ad0a4d7)과 최신 채점 코드 커밋(d856485)이 다르다는 사실을 그대로 적는다.
+- 이 작업 폴더에는 `HANDOFF_2026-11-12.md`가 없었다(`ls` 확인, 없음). 작업 범위 밖 파일이므로 만들거나 고치거나 되돌리지 않았다. 있다면 `git status`에 남는 것은 허용한다.
+- 이 기록을 쓰는 커밋은 `evaluation/round2_report.md`만 바꾼다. 커밋 뒤 `git status --porcelain`·`git ls-files .env`·`git log --all -- .env`는 다시 실행해 최종 응답에 출력을 남긴다.
