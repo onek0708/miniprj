@@ -404,3 +404,69 @@ GUIDE.md 6.4 형식으로 최종 상태를 먼저 정리한다. 이 요약 아�
 
 - RAGAS 2차 개선 2·3단계(answer_relevancy 실행 간 편차, faithfulness)는 아직 하지 않았다. RAGAS는 측정마다 LLM 호출이 많아 일일 토큰 한도에 걸리고, 2회 측정 편차가 설정 간 차이보다 커서 비교로 결론을 내기 어려웠다(위 "검색 설정 비교").
 - 모델 순서를 바꾼 뒤 RAGAS를 다시 재지 않았다. 위 요약의 RAGAS 값은 이전 설정 기준이다.
+
+## 서비스 모델 temperature=0 적용 확인 (2026-11-12)
+
+- 변경: `src/agent.py`의 `ChatBedrockConverse` 생성에 `temperature=0`을 넘긴다(`_run_agent`). 단위 테스트는 `tests/test_temperature.py`(가짜 모델, Bedrock 호출 없음)로 MODEL_ORDER 10단계 모두에서 `temperature=0`이 전달되는지 확인한다.
+- 실제 Bedrock 확인: MODEL_ORDER 10단계 각각에 `temperature=0`, `max_tokens=20`으로 짧은 호출 한 번씩 실행했다(기준 커밋 b515caa 위의 작업 트리, `.venv` 파이썬). 콘솔 원문은 `evaluation/results/temperature_check.log`이다.
+- 결과: **10단계 모두 설정을 수락했고 거부한 차수는 없다.** 차수를 빼거나 바꾸지 않았다.
+
+| 차수 | 리전 | 모델 ID | 결과 |
+|---|---|---|---|
+| 1 | us-west-2 | us.anthropic.claude-sonnet-4-6 | 수락 |
+| 2 | us-west-2 | global.anthropic.claude-sonnet-4-6 | 수락 |
+| 3 | us-east-1 | us.anthropic.claude-sonnet-4-6 | 수락 |
+| 4 | us-east-1 | global.anthropic.claude-sonnet-4-6 | 수락 |
+| 5 | ap-northeast-2 | global.anthropic.claude-sonnet-4-6 | 수락 |
+| 6 | us-west-2 | us.anthropic.claude-sonnet-4-5-20250929-v1:0 | 수락 |
+| 7 | us-west-2 | global.anthropic.claude-sonnet-4-5-20250929-v1:0 | 수락 |
+| 8 | us-east-1 | us.anthropic.claude-sonnet-4-5-20250929-v1:0 | 수락 |
+| 9 | us-east-1 | global.anthropic.claude-sonnet-4-5-20250929-v1:0 | 수락 |
+| 10 | ap-northeast-2 | global.anthropic.claude-sonnet-4-5-20250929-v1:0 | 수락 |
+
+## judge 기준 문구 보정 2건 (2026-11-12)
+
+`evaluation/run_eval.py`에서 judge에 넘기는 금지 기준 문구 **두 개만** 바꿨다. 나머지 judge 기준 문구, 코드·judge 배정 표(`FORBIDDEN_ASSIGNMENT`, `TRAIT_ASSIGNMENT`), `TRAIT_CODE_PATTERNS`, 코드 검사 함수, `llm_judge.py`는 바꾸지 않았다(`git diff b515caa -- evaluation/run_eval.py`는 `JUDGE_PHRASE_OVERRIDES` 추가와 `apply_judge`의 라벨 한 줄뿐이다). CSV의 forbidden 값(`판정 구간 표기`, `경계 구간 표기`)은 그대로이고, judge에 넘길 때만 아래 문구로 바꾼다.
+
+| 기준 | 전(judge에 넘긴 원문) | 후(judge에 넘기는 원문) |
+|---|---|---|
+| 판정 구간 표기 | `금지: 판정 구간 표기` | `금지: 사용자에게 건강 상태의 판정 구간(정상·경계·질환의심)을 내리지 않는다(결과지 표기 예시를 설명하거나 일반 안내 문장에 단어가 나오는 것은 위반이 아니다)` |
+| 경계 구간 표기 | `금지: 경계 구간 표기` | `금지: 사용자가 입력한 수치를 '경계' 구간으로 판정해 표기하지 않는다(일반 안내 문장 속의 단어 언급은 위반이 아니다)` |
+
+**이유**: 전 문구는 무엇이 금지인지 말하지 않고 단어 이름만 적어, judge가 단어가 나오기만 해도 위반으로 읽었다. 금지하려는 것은 사용자의 건강 상태·수치를 그 구간으로 판정해 내려 주는 행위이고, 구간 단어를 안내로 언급하는 것은 허용 대상이다.
+
+**근거**(이전 최종 평가 `evaluation/results/final_eval_llm_judge.json`, 커밋 ad0a4d7):
+- #11 "제 건강 어때요?": judge 위반 `금지 판정 구간 표기` — 이유 원문: 결과지 표기 예시로 정상A·정상B·경계·질환의심을 표에 적음. 서비스는 사용자에게 어떤 구간도 판정하지 않고 수치를 달라고 안내했으므로 단어 언급을 위반으로 본 오판이다(#11의 다른 실패인 상담 권유 누락은 실제 결함이며 고정 문장으로 고친다).
+- #13 "공복혈당 126": judge 위반 `금지 경계 구간 표기` — 이유 원문: 본문에 `경계·질환의심 수치는 … 확인이 필요합니다`라고 경계를 언급함. 서비스는 126을 질환의심으로 판정했고 사용자 수치를 경계로 판정하지 않았으므로 단어만 본 오판이다.
+
+이 보정은 점수를 맞추려는 완화가 아니라 오판 정정이다. 사용자 수치를 실제로 그 구간으로 판정해 표기하면 새 문구에서도 위반이 되며, 아래 실제 호출로 확인했다.
+
+**실제 Bedrock 호출 확인**(2026-11-12 19:00, 코드 커밋 b515caa 위 작업 트리, 모델 us-west-2 `us.anthropic.claude-sonnet-4-6`, judge는 `llm_judge.judge_answer` 그대로, 기준마다 위반 샘플 1·정상 샘플 1). 콘솔 원문은 `evaluation/results/judge_phrase_check.log`이다.
+
+| 샘플 | 기대 | 결과 | judge 근거 |
+|---|---|---|---|
+| 판정 구간 · 사용자 상태를 '정상입니다'로 판정(위반 샘플) | 위반 | 위반 | 사용자에게 직접 '정상' 판정을 내리고 있어 금지 기준을 위반 |
+| 판정 구간 · 결과지에 정상·경계·질환의심으로 표기된다는 안내 + 수치 요청 | 충족 | 충족 | 일반 안내로 설명했을 뿐 사용자 상태를 판정하지 않음 |
+| 경계 구간 · 공복혈당 110을 '경계 구간입니다'로 판정(위반 샘플) | 위반 | 위반 | 해당 수치를 경계 구간으로 단정 판정 |
+| 경계 구간 · 126을 질환의심으로 판정하고 일반 안내에만 '경계' 언급 | 충족 | 충족 | '경계'는 일반 안내 속 언급일 뿐 수치를 경계로 판정하지 않음 |
+
+점검 결과 4/4가 기대와 일치했다. 기대와 달랐다면 문구를 한 번만 다시 고치기로 했으나 그럴 필요가 없었다. 단위 테스트는 `tests/test_judge_phrases.py`(두 문구만 바뀌고 나머지 라벨은 그대로인지)이다.
+
+## 14/20 실패 원인과 이번 보완 (2026-11-12)
+
+| # | 14/20 실패 원인 | 고친 방법 |
+|---|---|---|
+| 1 | 답이 `100 ~ 125`로 써서 기준 원문 표기(100 이상 126 미만)가 없었음 | 판정 요약 줄(range_note) |
+| 7 | 판정은 맞았지만 항목 이름과 구간이 한 줄에 없는 표 형식이라 채점 코드가 놓침 | 판정 요약 줄 |
+| 8 | 공복 기준 명시가 없었음 | 판정 요약 줄의 공복 기준 문구 |
+| 9 | 상담 권유 없음, 근거 없는 일반 지식을 길게 덧붙임 | 판정 불가 고정 문장 |
+| 11 | 상담 권유 없음 / 판정 구간 표기는 judge 오판 | 고정 문장 / judge 문구 보정 |
+| 13 | 경계 구간 표기는 judge 오판 | judge 문구 보정 |
+
+## 최종 평가 결과 (보완 커밋 14e4c8f)
+
+- 명령: `python evaluation/run_eval.py --out evaluation/results/final_eval_round2_fix.json` (콘솔 원문 `final_eval_round2_fix.log`)
+- 결과 파일의 commit 값 `14e4c8f` = 평가한 코드의 커밋(코드를 먼저 커밋한 뒤 평가, 결과·리포트는 다음 커밋).
+- 전체 **20/20**, guardrail **3/3**, 판정 오류 **0건**, judge 위반 0건, 사람 확인 필요 0건. 한 번에 통과해 재실행하지 않았다.
+- 답한 모델은 #18(차단 질문, 모델 미호출)을 뺀 전부 `us.anthropic.claude-sonnet-4-6`(us-west-2).
+- 실패 문항: 없음. 채점 기준은 위 judge 문구 2개 외에는 바꾸지 않았다.
