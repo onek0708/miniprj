@@ -113,3 +113,28 @@ def test_배정_표가_CSV_값과_run_eval_동작에_일치한다():
             assert who == ("코드+judge" if by_judge else "코드")
         else:
             assert who == ("judge" if by_judge else "코드")
+
+
+def test_self_check_기록과_횟수_보존(tmp_path):
+    """run_self_check는 샘플 8개의 원문·기대·실제를 파일에 남기고, 재실행 시 attempts를 이어 붙인다."""
+    import csv
+    import json
+    from evaluation import llm_judge, run_eval
+
+    with open(run_eval.CSV_PATH, encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    def fake(question, answer, forbidden, traits):
+        bad = any(s["answer"] == answer and not s["expected_pass"] for s in llm_judge.SELF_CHECK_SAMPLES)
+        v = {"forbidden": [{"id": f"F{i}", "violated": bad} for i in range(1, len(forbidden) + 1)],
+             "traits": [{"id": f"T{i}", "met": not bad} for i in range(1, len(traits) + 1)]}
+        return {"raw": json.dumps(v), "verdicts": v, "model": {"region": "r", "model_id": "m"}}
+
+    out = tmp_path / "sc.json"
+    assert run_eval.run_self_check(rows, judge_fn=fake, out=out) == 0
+    assert run_eval.run_self_check(rows, judge_fn=fake, out=out) == 0
+    attempts = json.loads(out.read_text(encoding="utf-8"))["attempts"]
+    assert [a["attempt"] for a in attempts] == [1, 2]
+    assert attempts[0]["matched"] == 8 and len(attempts[0]["samples"]) == 8
+    s = attempts[0]["samples"][0]
+    assert s["judge_raw"] and s["checklist"]["forbidden"] and "expected_pass" in s and "actual_pass" in s

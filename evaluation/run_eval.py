@@ -1,6 +1,6 @@
 """평가 실행 스크립트: test_queries.csv 20건을 run_query로 돌려 통과율을 출력하고 파일로 저장한다.
 
-사용법: python evaluation/run_eval.py [--out 경로]
+사용법: python evaluation/run_eval.py [--out 경로] [--self-check]
 각 문항은 기계로 확인 가능한 항목만 검사한다.
   - 응답 모양: answer·contexts·trace 세 키, answer가 고정 면책 문장으로 끝남
   - 구간 특성: expected_traits의 `구간:항목=구간` 이 답에 나타남
@@ -249,13 +249,57 @@ def summarize(results: list) -> dict:
     }
 
 
+def run_self_check(rows: list, judge_fn=None, out: Path = None) -> int:
+    """고의로 틀린 답 5개와 올바른 답 3개를 실제 채점(apply_judge)과 같은 경로로 판정하고 원문을 파일로 남긴다.
+
+    같은 파일에 이미 점검 기록이 있으면 attempts 뒤에 이어 붙여 횟수를 보존한다. 8개 모두 기대와 같으면 0을 돌려준다.
+    """
+    by_id = {r["id"]: r for r in rows}
+    out = out or RESULT_DIR / "judge_self_check.json"
+    samples = []
+    for spec in llm_judge.SELF_CHECK_SAMPLES:
+        row = by_id[spec["row"]]
+        forbidden, traits = judge_targets(row)
+        captured = {}
+
+        def capture(question, answer, forb, trt, _c=captured):
+            _c.update((judge_fn or llm_judge.judge)(question, answer, forb, trt))
+            return _c
+
+        failures, review = apply_judge(row, spec["answer"], capture)
+        actual_pass = not failures and review is None
+        samples.append({"name": spec["name"], "row": spec["row"], "answer": spec["answer"],
+                        "checklist": {"forbidden": forbidden, "traits": traits},
+                        "judge_raw": captured.get("raw", ""), "model": captured.get("model"),
+                        "expected_pass": spec["expected_pass"], "actual_pass": actual_pass,
+                        "failures": failures, "needs_human_review": review,
+                        "match": actual_pass == spec["expected_pass"]})
+    matched = sum(s["match"] for s in samples)
+    model = next((s["model"] for s in samples if s["model"]), None) or {}
+    previous = []
+    if out.exists():
+        previous = json.loads(out.read_text(encoding="utf-8")).get("attempts", [])
+    attempt = {"attempt": len(previous) + 1, "date": datetime.now().isoformat(timespec="seconds"),
+               "commit": get_commit(), "model": model.get("model_id"), "region": model.get("region"),
+               "matched": matched, "total": len(samples), "samples": samples}
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"attempts": previous + [attempt]}, ensure_ascii=False, indent=2), encoding="utf-8")
+    for s in samples:
+        print(f"  {s['name']:<28} 기대={'통과' if s['expected_pass'] else '실패'} 실제={'통과' if s['actual_pass'] else '실패'} {'OK' if s['match'] else 'MISMATCH'}")
+    print(f"self-check {matched}/{len(samples)} (시도 {attempt['attempt']}회차) 저장: {out}")
+    return 0 if matched == len(samples) else 1
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="평가 질문을 실행해 통과율을 출력·저장한다")
     parser.add_argument("--out", help="결과 JSON 저장 경로 (기본: evaluation/results/eval_시각.json)")
+    parser.add_argument("--self-check", action="store_true", help="judge 점검: 틀린 답 5개·옳은 답 3개를 판정해 기록한다")
     args = parser.parse_args(argv)
 
     with open(CSV_PATH, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
+    if args.self_check:
+        return run_self_check(rows)
     results = [evaluate_row(r) for r in rows]
     summary = summarize(results)
 
