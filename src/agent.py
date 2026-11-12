@@ -164,6 +164,62 @@ def ensure_assumptions(answer: str, trace: list) -> str:
     return answer + "\n\n[판정 가정] " + " / ".join(missing)
 
 
+def _fmt_value(v) -> str:
+    """입력값을 군더더기 없는 숫자 문자열로 만든다 (예: 110.0 → 110)."""
+    return f"{v:g}" if isinstance(v, (int, float)) else str(v)
+
+
+def _summary_entries(r: dict, bmi: Optional[float]) -> list[tuple[str, str]]:
+    """판정 결과 하나를 (한 줄 요약, 줄에 반드시 있어야 할 단어 모음) 목록으로 만든다. 성별 구분은 남·여 각각."""
+    name, unit = str(r.get("item", "")), r.get("unit") or ""
+    if r.get("status") != "판정":
+        return [(f"- {name} {_fmt_value(r.get('value'))}{unit}: 판정 보류 ({r.get('reason', '')})", "")]
+    subs = [(f" ({s} 기준)", v) for s, v in r["by_sex"].items() if v.get("status") == "판정"] \
+        if r.get("by_sex") else [("", r)]
+    out = []
+    for tag, v in subs:
+        rng = v.get("range") or v.get("range_note") or ""
+        calc = f" (계산값 {bmi:g})" if bmi is not None and name == "체질량지수" else ""
+        fast = " (공복 기준 수치로 판정)" if name == "공복혈당" else ""
+        line = (f"- {name}{tag} {_fmt_value(v.get('value'))}{v.get('unit') or unit}{calc}: "
+                f"{v.get('band')} 구간 (기준 {rng}){fast}")
+        out.append((line, "\n".join((name, _fmt_value(v.get("value")), str(v.get("band")), rng))))
+    return out
+
+
+def ensure_summary(answer: str, trace: list) -> str:
+    """판정 요약 한 줄을 코드가 보장한다: 항목 이름·입력값·단위·구간·기준 원문 표기가 한 줄에 없으면 요약 줄을 덧붙인다."""
+    latest: dict[str, dict] = {}
+    for r in _judge_results(trace):
+        latest[str(r.get("item"))] = r
+    bmi = next((s["bmi"] for s in reversed([_loads(x) for x in trace if x.get("step") == "calc_bmi"])
+                if s.get("bmi") is not None), None)
+    lines = answer.split("\n")
+    missing = []
+    for r in latest.values():
+        for line, need in _summary_entries(r, bmi):
+            if r.get("status") != "판정":
+                if not any(n in l and any(w in l for w in _HOLD_WORDS) for l in lines for n in _item_names(r)):
+                    missing.append(line)
+                continue
+            name, val, band, rng = need.split("\n")
+            unit = r.get("unit") or ""
+            if not any(name in l and val in l and band in l and rng in l and (not unit or unit in l)
+                       and (name != "공복혈당" or "공복 기준" in l) for l in lines):
+                missing.append(line)
+    if not missing:
+        return answer
+    return answer + "\n\n[판정 요약]\n" + "\n".join(missing)
+
+
+def _loads(step: dict) -> dict:
+    """trace 단계의 output(JSON)을 dict로 읽고, 실패하면 빈 dict를 돌려준다."""
+    try:
+        return json.loads(step["output"])
+    except (TypeError, ValueError, KeyError):
+        return {}
+
+
 NO_GUIDE = "근거 지침 없음"
 _GUIDE_WORDS = ("지침", "생활습관", "관리", "식습관", "운동", "음식", "어떻게", "줄이", "개선")
 # 항목을 특정하지 않아도 생활습관을 직접 묻는 말 (예: "식습관 지침")
@@ -280,6 +336,30 @@ def ensure_referral(answer: str, trace: list) -> str:
     return answer + "\n\n" + REFERRAL_NOTICE
 
 
+CONSULT_NOTICE = "정확한 판단은 검진을 받은 검진 기관이나 가까운 의료기관에 상담해 주세요."
+UNJUDGEABLE_MESSAGE = ("이 질문은 판정 기준표와 지침에 없는 내용이라 설명드릴 수 없습니다. "
+                       "판정이 필요하시면 수치(예: 혈압 120/80)를 알려 주세요. " + CONSULT_NOTICE)
+
+
+def ensure_unjudgeable(answer: str, contexts: list, trace: list) -> str:
+    """판정할 수 없는 질문은 모델 답 대신 코드가 정한 문장으로 답한다.
+
+    판정·BMI 계산 결과와 근거 지침이 모두 없으면 고정 안내문을, 판정이 모두 보류이고 근거 지침이 없으면
+    도구의 보류 사유와 상담 권유만 쓴다. 일부만 판정됐거나 근거 지침이 있으면 모델 답을 그대로 둔다.
+    """
+    if contexts:
+        return answer
+    results = _judge_results(trace)
+    bmis = [_loads(x) for x in trace if x.get("step") == "calc_bmi"]
+    if any(r.get("status") == "판정" for r in results) or any(b.get("status") == "계산" for b in bmis):
+        return answer
+    if not results and not bmis:
+        return UNJUDGEABLE_MESSAGE
+    reasons = [f"- {r.get('item', '')} {_fmt_value(r.get('value'))}{r.get('unit') or ''}: 판정 보류 ({r.get('reason', '')})"
+               for r in results] + [f"- 체질량지수: 계산 보류 ({b.get('reason', '')})" for b in bmis]
+    return "판정할 수 없어 보류합니다.\n" + "\n".join(reasons) + "\n" + CONSULT_NOTICE
+
+
 def _build_tools(rec: _Recorder) -> list:
     from langchain_core.tools import tool
 
@@ -346,10 +426,11 @@ def _run_agent(question: str, model_id: str, region: str) -> dict:
     load_dotenv()
     rec = _Recorder()
     # 기존 서울 리전 global 모델이 일일 토큰 한도에 걸려 MODEL_ORDER의 10단계 순서로 교체 (기술 스택 고정값과 다름)
-    model = ChatBedrockConverse(model=model_id, region_name=region)
+    model = ChatBedrockConverse(model=model_id, region_name=region, temperature=0)  # 같은 질문에 같은 답이 나오도록 고정
     agent = create_agent(model, _build_tools(rec), system_prompt=SYSTEM_PROMPT)
     result = agent.invoke({"messages": [{"role": "user", "content": question}]})
     answer = ensure_band_consistency(result["messages"][-1].text, rec.trace)  # 구간 표기는 코드 판정과 대조한다
+    answer = ensure_summary(answer, rec.trace)  # 판정 요약 한 줄도 코드가 보장한다
     answer = ensure_assumptions(answer, rec.trace)  # 가정·환산 명시는 코드가 보장한다
     answer = ensure_referral(answer, rec.trace)  # 질환의심 진료 안내(G3)도 코드가 보장한다
     answer, contexts = ensure_evidence(answer, question, rec.contexts, rec.trace)  # 근거 표기도 코드가 보장한다
@@ -391,7 +472,8 @@ def _result(answer: str, contexts: list, trace: list) -> dict:
 
 def _guard_step(question: str, guard: dict) -> dict:
     """입력 가드의 감지 사실을 trace 단계로 만든다."""
-    out = "차단 (감지: " + ", ".join(guard["detected"]) + ")" if guard["blocked"] else "통과 (감지: 없음)"
+    found = ", ".join(guard["detected"]) if guard["detected"] else "없음"
+    out = f"차단 (감지: {found})" if guard["blocked"] else f"통과 (감지: {found})"
     return {"step": "input_guard", "input": question, "output": out, "detected": guard["detected"],
             "blocked": guard["blocked"]}
 
@@ -426,7 +508,8 @@ def run_query(question) -> dict:
     try:
         out = _invoke_agent(shown)
         trace = [_guard_step(shown, guard)] + out.get("trace", [])
-        answer = f"{out['answer']}\n{PII_NOTICE}" if pii else out["answer"]
+        answer = ensure_unjudgeable(out["answer"], out.get("contexts", []), out.get("trace", []))  # 판정 불가는 고정 문장
+        answer = f"{answer}\n{PII_NOTICE}" if pii else answer
         answer = f"{answer}\n{INJECTION_NOTICE}" if inj else answer
         return _result(answer, out.get("contexts", []), trace)
     except Exception as exc:  # Bedrock 실패 등 어떤 오류에도 서버는 멈추지 않는다
