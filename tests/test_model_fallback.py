@@ -99,3 +99,28 @@ def test_10개가_모두_막히면_예외(monkeypatch):
 def test_Haiku_Nova_gpt_oss는_목록에_없음():
     text = " ".join(m for _, m in agent.MODEL_ORDER).lower()
     assert not any(x in text for x in ("haiku", "nova", "gpt-oss"))
+
+
+def test_서비스_모델은_temperature_0으로_만든다(monkeypatch):
+    """가짜 ChatBedrockConverse로 _run_agent가 넘기는 생성 인자를 확인한다."""
+    import langchain.agents
+    import langchain_aws
+
+    made = {}
+
+    class _FakeModel:
+        def __init__(self, **kwargs):
+            made.update(kwargs)
+
+    class _FakeMsg:
+        text = "답"
+
+    class _FakeAgent:
+        def invoke(self, _):
+            return {"messages": [_FakeMsg()]}
+
+    monkeypatch.setattr(langchain_aws, "ChatBedrockConverse", _FakeModel)
+    monkeypatch.setattr(langchain.agents, "create_agent", lambda *a, **k: _FakeAgent())
+    agent._run_agent("질문", "us.anthropic.claude-sonnet-4-6", "us-west-2")
+    assert made["temperature"] == 0
+    assert made["model"] == "us.anthropic.claude-sonnet-4-6" and made["region_name"] == "us-west-2"

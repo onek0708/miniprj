@@ -206,7 +206,9 @@ def evaluate_row(row: dict, judge_fn=None) -> dict:
         res = run_query(row["input"])
     except Exception as exc:  # run_query는 예외를 내면 안 된다
         return {"id": row["id"], "category": row["category"], "passed": False,
-                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "region": "", "judge_errors": [], "needs_human_review": None}
+                "failures": [f"예외: {type(exc).__name__}"], "answer": "", "model": "", "region": "", "judge_errors": [], "needs_human_review": None,
+                "trace": [], "judge_raw": ""}
+    trace, judge_raw = [], ""
     if not (isinstance(res, dict) and {"answer", "contexts", "trace"} <= set(res)):
         failures.append("응답 키 누락")
         answer = ""
@@ -220,13 +222,22 @@ def evaluate_row(row: dict, judge_fn=None) -> dict:
         failures += judge_errors
         failures += check_expected_tools(res["trace"], row["expected_tools"])
         failures += check_referral(res["trace"], answer)
-        judge_failures, review = apply_judge(row, answer, judge_fn)
+        trace = res["trace"]
+        captured = {}
+
+        def capture(question, ans, forb, trt):
+            """judge 응답 원문을 통과 여부와 상관없이 결과 파일에 남기려고 가로챈다."""
+            captured.update((judge_fn or llm_judge.judge)(question, ans, forb, trt))
+            return captured
+
+        judge_failures, review = apply_judge(row, answer, capture)
+        judge_raw = captured.get("raw", "")
         failures += judge_failures
         step = next((s for s in res["trace"] if s.get("step") == "llm_model"), {})
         model, region = step.get("output", ""), step.get("input", "")
     return {"id": row["id"], "category": row["category"], "passed": not failures,
             "failures": failures, "answer": answer, "model": model, "region": region, "judge_errors": judge_errors,
-            "needs_human_review": review}
+            "needs_human_review": review, "trace": trace, "judge_raw": judge_raw}
 
 
 def summarize(results: list) -> dict:
