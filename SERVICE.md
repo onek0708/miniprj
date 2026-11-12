@@ -110,8 +110,8 @@
 ### 기술 스택
 
 - Python, LangChain, LangGraph. 에이전트는 `langchain.agents`의 `create_agent`로 만든다.
-- 모델: Amazon Bedrock `global.anthropic.claude-sonnet-4-6` (`ChatBedrockConverse`), 리전 `ap-northeast-2`
-  - 강의 고정값은 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이다. 일일 토큰 한도에 걸려 바꿨고, 최종 평가 결과(20/20)는 Sonnet 4.6으로 잰 값을 인정한다. 이 차이는 README와 `evaluation/round2_report.md`에 기록한다.
+- 모델: Amazon Bedrock (`ChatBedrockConverse`, `temperature=0`), `src/agent.py`의 `MODEL_ORDER` 10단계 (리전, 모델 ID) 순서. 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 그 질문을 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 `trace`의 `llm_model` 단계에 남긴다. Haiku·Nova·gpt-oss는 쓰지 않는다.
+  - 강의 고정값은 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이다. 일일 토큰 한도에 걸려 바꿨고, 최종 평가 결과(서비스 보완 후 19/20)는 Sonnet 4.6으로 잰 값을 인정한다. 이 차이는 README와 `evaluation/round2_report.md`에 기록한다. (2026-11-12 갱신: 이전 표기 "`global.anthropic.claude-sonnet-4-6`, 리전 `ap-northeast-2`"는 10단계 순서로 바뀌기 전의 값이다.)
 - 임베딩: `amazon.titan-embed-text-v2:0`, 벡터DB: Chroma
 - 비밀 값은 `.env`에서 읽고 코드와 저장소에 넣지 않는다.
 
@@ -151,7 +151,7 @@
 - **"쓸만하다"를 판단하는 지표**: 판정이 있는 답마다 **판정 구간, 근거 문서, 다음 행동(생활습관 또는 진료)** 이 모두 들어 있다.
 - **RAGAS 측정**: 네 지표(context_recall, context_precision, faithfulness, answer_relevancy)는 통과 기준 없이 숫자만 기록한다.
   - 평가 질문은 `evaluation/test_queries.csv` 20건이다. 모범 답안은 `reference` 열로, `criteria.json`과 지침 문서를 근거로 쓴다.
-  - 심판 모델은 서비스와 같은 Sonnet 4.6(ap-northeast-2)이다. 실행 스크립트는 `evaluation/run_ragas.py`다.
+  - 심판 모델은 서비스와 같은 10단계 모델 순서를 회차 단위로 쓴다(한 회차는 한 모델로만 채점). 기록된 RAGAS 값은 10단계 순서로 바꾸기 전 Sonnet 4.6(ap-northeast-2)으로 잰 것이다. 실행 스크립트는 `evaluation/run_ragas.py`다.
   - 서비스 응답의 `contexts`는 `GUIDE.md` 정의(지침 검색 결과)대로 둔다. 평가할 때만 `trace`의 코드 판정 결과·계산값과 해당 항목의 판정 기준(`criteria.json` 구간·출처)을 근거에 더한다. 답의 판정 문장이 실제로는 코드 판정에 근거하기 때문이다.
   - 근거가 하나도 없는 문항은 계산에서 빼고 그 수를 리포트에 적는다.
   - 결과는 `evaluation/round2_report.md`와 README 5장에 기록한다.
