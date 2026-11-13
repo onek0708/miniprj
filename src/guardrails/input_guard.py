@@ -46,10 +46,10 @@ _INJECT = re.compile(
     r"|시스템\s*프롬프트\s*(를|을)?\s*(공개|출력|보여)\w*"
     r"|(무조건|항상)\s*(정상|괜찮다)\w*\s*(이?라고)?\s*(답|말|대답)\w*"
     # 아래는 Day05 방식: 단어 하나가 아니라 "덮어쓰려는 동작"과 "현재 지시라는 대상"이 함께 나올 때만 잡는다
-    r"|(지시|지침|명령|프롬프트|규칙|대화\s*내용|대화)\S*\s*(은|는|을|를)?\s*(모두\s*|전부\s*|다\s*)?(무시|잊|됐고|따르지\s*(말|마))\w*"
+    r"|(지시|명령|프롬프트|규칙|대화\s*내용|대화)\S*\s*(은|는|을|를)?\s*(모두\s*|전부\s*|다\s*)?(무시|잊|됐고|따르지\s*(말|마))\w*"
     r"|(ignore|forget|disregard|override)\s+(all\s+|the\s+|your\s+|any\s+)?(previous\s+|prior\s+|above\s+|earlier\s+)?(instructions?|prompts?|rules?)"
     r"|(지금부터|이제부터)\s*(너|당신)(의\s*역할)?\s*(은|는|이)\s*[^.!?\n]{0,20}?(야|이다|입니다|이야|다)(?=[\s.!?,]|$)"
-    r"|you\s+are\s+now\s+\w+"
+    r"|you\s+are\s+now\s+[^.!?]*"
     r"|(관리자|개발자|디버그|점검|DAN)\s*모드\S*\s*(로\s*)?(전환|진입|들어가|바꿔)\w*"
     r"|새로운\s*역할\S*\s*(부여\s*받|맡)(아라|아|으세요|아\s*줘|어라)(?=[\s.!?,]|$)"
     r"|(시스템|system)\s*(프롬프트|메시지|message|prompt|지침|instructions?)[^.!?\n]{0,15}?(알려|출력|보여|공개|말해|reveal|show|print|tell)\w*"
@@ -57,7 +57,16 @@ _INJECT = re.compile(
     r"|reveal\s+(your|the)\s+(system\s+)?prompt"
     r"|그대로\s*따라\s*해[^.!?\n]*"
     r"|(비밀번호|API\s*키|토큰|token|password|secret)\S*\s*[^.!?\n]{0,6}?(출력|보여|알려|공개)\w*"
-    r"|(DB|데이터베이스|database)\S*\s*(전부\s*|모두\s*)?(삭제|지우|drop|delete)\w*(\s*\S*\s*(명령|쿼리)\S*)?(\s*실행\w*)?)", re.I)
+    r"|(DB|데이터베이스|database)\S*\s*(전부\s*|모두\s*)?(삭제|지우|drop|delete)\w*(\s*\S*\s*(명령|쿼리)\S*)?(\s*실행\w*)?"
+    # 강의 실습(day5_practice) 공격 유형: 규칙 없는 AI, 역할 문구, system:/<admin> 구분자, 숨겨진 지시 빼내기, 새 명령, 테이블 삭제
+    r"|규칙\s*(이|가)\s*없는\s*(AI|인공지능|모드)\S*"
+    r"|새로운\s*역할(로|을)\s*(답|응답|행동)\w*"
+    r"|(system|admin|root)\s*:\s*[^.!?\n]*"
+    r"|<(system|admin|root)>[^<]*</(system|admin|root)>|</?(system|admin|root)>"
+    r"|(첫\s*(번째\s*)?지시문|숨겨진\s*(지시|프롬프트))\S*\s*(을|를)?\s*(그대로\s*)?(공개|출력|알려)\w*"
+    r"|새로운\s*(명령|지시)\S*\s*[:：][^.!?\n]*"
+    r"|(테이블|table)\S*\s*(을|를)?\s*(전부\s*|모두\s*)?(삭제|지우|drop|delete)\w*"
+    r"|(관리자|개발자|디버그|점검|DAN)\s*모드\S*\s*(활성화|켜)\w*)", re.I)
 INJECTION_NOTICE = "질문에 포함된 지시문(이전 지시 무시, 결과 강요 등)은 따르지 않고, 입력된 수치를 기준에 따라 판정했습니다."
 
 
