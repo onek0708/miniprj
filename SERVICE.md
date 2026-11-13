@@ -111,7 +111,7 @@
 
 - Python, LangChain, LangGraph. 에이전트는 `langchain.agents`의 `create_agent`로 만든다.
 - 모델: Amazon Bedrock (`ChatBedrockConverse`, `temperature=0`), `src/agent.py`의 `MODEL_ORDER` 10단계 (리전, 모델 ID) 순서. 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 그 질문을 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 `trace`의 `llm_model` 단계에 남긴다. Haiku·Nova·gpt-oss는 쓰지 않는다.
-  - 강의 고정값은 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이다. 일일 토큰 한도에 걸려 바꿨고, 최종 평가 결과(서비스 보완 후 19/20)는 Sonnet 4.6으로 잰 값을 인정한다. 이 차이는 README와 `evaluation/round2_report.md`에 기록한다. (2026-11-12 갱신: 이전 표기 "`global.anthropic.claude-sonnet-4-6`, 리전 `ap-northeast-2`"는 10단계 순서로 바뀌기 전의 값이다.)
+  - 강의 고정값은 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`us-east-1`)이다. 일일 토큰 한도에 걸려 바꿨고, 최종 평가 결과(판정 요약 줄 보장 후 20/20, 직전 19/20)는 Sonnet 4.6으로 잰 값을 인정한다. 이 차이는 README와 `evaluation/round2_report.md`에 기록한다. (2026-11-12 갱신: 이전 표기 "`global.anthropic.claude-sonnet-4-6`, 리전 `ap-northeast-2`"는 10단계 순서로 바뀌기 전의 값이다.)
 - 임베딩: `amazon.titan-embed-text-v2:0`, 벡터DB: Chroma
 - 비밀 값은 `.env`에서 읽고 코드와 저장소에 넣지 않는다.
 
