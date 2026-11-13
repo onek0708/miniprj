@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/query", "destination": "https://miniprj-cs66.onrender.com/query" }
+  ]
+}
