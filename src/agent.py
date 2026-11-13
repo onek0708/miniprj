@@ -232,6 +232,83 @@ def _judge_results(trace: list) -> list[dict]:
     return out
 
 
+def _fmt_value(v) -> str:
+    """입력값을 군더더기 없는 숫자 문자열로 만든다 (예: 110.0 → 110)."""
+    return f"{v:g}" if isinstance(v, (int, float)) else str(v)
+
+
+def _summary_items(trace: list) -> list[dict]:
+    """trace의 judge_checkup_item·calc_bmi 결과를 요약 단위로 정규화한다.
+
+    (항목, 값, 성별)이 같은 결과는 하나로 합치고, 성별이 다르거나 값이 다른 결과는 각각 남긴다.
+    성별 결과는 by_sex에서 오거나 결과의 sex 필드(성별 지정 호출)에서 온다.
+    """
+    bmi_calc = next((b["bmi"] for b in reversed([_loads(x) for x in trace if x.get("step") == "calc_bmi"])
+                     if b.get("bmi") is not None), None)
+    seen: dict[tuple, dict] = {}
+    for r in _judge_results(trace):
+        subs = [(sx, v) for sx, v in r["by_sex"].items()] if r.get("by_sex") else [(r.get("sex"), r)]
+        for sex, v in subs:
+            value = v.get("value", r.get("value"))
+            key = (r.get("item"), float(value) if isinstance(value, (int, float)) else value, sex)
+            if key not in seen:
+                seen[key] = {"item": str(r.get("item", "")), "value": value, "unit": v.get("unit") or r.get("unit") or "",
+                             "sex": sex, "status": v.get("status", r.get("status")), "band": v.get("band"),
+                             "range_text": v.get("range") or v.get("range_note") or "",
+                             "reason": v.get("reason", r.get("reason", "")), "bmi": None}
+                if seen[key]["item"] == "체질량지수" and bmi_calc is not None:
+                    seen[key]["bmi"] = bmi_calc
+    return list(seen.values())
+
+
+def _summary_line(e: dict) -> str:
+    """요약 단위 하나를 항목 이름·입력값·단위·구간·기준 원문 표기가 든 한 줄로 만든다."""
+    tag = f" ({e['sex']} 기준)" if e["sex"] else ""
+    head = f"- {e['item']}{tag} {_fmt_value(e['value'])}{e['unit']}"
+    if e["status"] != "판정":
+        return f"{head}: 판정 보류 ({e['reason']})"
+    calc = f" (계산값 {e['bmi']:g})" if e["bmi"] is not None else ""
+    fast = " (공복 기준 수치로 판정)" if e["item"] == "공복혈당" else ""
+    return f"{head}{calc}: {e['band']} 구간 (기준 {e['range_text']}){fast}"
+
+
+def _has_number(line: str, value) -> bool:
+    """줄에 값이 숫자 경계 기준으로 정확히 있는지 확인한다 (예: 12는 120과 일치하지 않는다)."""
+    if not isinstance(value, (int, float)):
+        return str(value) in line
+    return re.search(r"(?<![\d.])" + re.escape(f"{value:g}") + r"(?:\.0+)?(?!\d|\.\d)", line) is not None
+
+
+def _line_covers(line: str, e: dict) -> bool:
+    """모델이 쓴 줄이 요약 줄을 대신할 수 있는지: 이름·값·구간·기준 표기·성별·공복 문구가 모두 있어야 한다."""
+    if not any(n in line for n in _item_names({"item": e["item"]})) or not _has_number(line.replace(e["range_text"], " ") if e["range_text"] else line, e["value"]):
+        return False
+    if e["status"] != "판정":
+        return any(w in line for w in _HOLD_WORDS)
+    if e["band"] not in line or e["range_text"] not in line or (e["unit"] and e["unit"] not in line):
+        return False
+    if e["sex"] and not re.search(rf"(?<![가-힣]){e['sex']}(?:성|자)?(?![가-힣])", line):
+        return False
+    return e["item"] != "공복혈당" or "공복 기준" in line
+
+
+def ensure_summary(answer: str, trace: list) -> str:
+    """판정 요약 한 줄을 코드가 보장한다: 결과마다 요약 줄이 답에 없으면 판정 도구 결과로 만든 줄을 덧붙인다."""
+    lines = answer.split("\n")
+    missing = [_summary_line(e) for e in _summary_items(trace) if not any(_line_covers(l, e) for l in lines)]
+    if not missing:
+        return answer
+    return answer + "\n\n[판정 요약]\n" + "\n".join(missing)
+
+
+def _loads(step: dict) -> dict:
+    """trace 단계의 output(JSON)을 dict로 읽고, 실패하면 빈 dict를 돌려준다."""
+    try:
+        return json.loads(step["output"])
+    except (TypeError, ValueError, KeyError):
+        return {}
+
+
 def _flagged_items(results: list[dict]) -> list[str]:
     """경계·질환의심 판정(성별별 포함)이 나온 항목 이름."""
     items = []
@@ -418,6 +495,7 @@ def _run_agent(question: str, model_id: str, region: str) -> dict:
     if fixed:
         return {"answer": answer, "contexts": [], "trace": rec.trace}
     answer = ensure_band_consistency(answer, rec.trace)  # 구간 표기는 코드 판정과 대조한다
+    answer = ensure_summary(answer, rec.trace)  # 판정 요약 줄(항목·값·성별별 구간)도 코드가 보장한다
     answer = ensure_assumptions(answer, rec.trace)  # 가정·환산 명시는 코드가 보장한다
     answer = ensure_fasting_assumption(answer, question, rec.trace)  # 사용자가 공복을 말하지 않았으면 공복 가정도 보장한다
     answer = ensure_unsupported_notice(answer, rec.trace)  # 다루지 않는 검사 안내·상담 권유도 코드가 보장한다
