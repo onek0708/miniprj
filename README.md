@@ -106,9 +106,11 @@ npm run dev        # 타입 체크·빌드: npm run build
 | **LLM-as-Judge 도입 후** (코드 검사+judge, `final_eval_llm_judge.json`, 커밋 3ebd95e) | **17/20 (85%)**, 기준 90% 미달, needs_human_review 0건 | **3/3** |
 | 서비스 보완 후 (`final_eval_service_fix.json`, 커밋 e7590e0) | 19/20 (95%), 기준 충족 (실패 #4 1건) | 3/3 |
 | 판정 요약 줄 보장 후 (`final_eval_integrated.json`, 판정 요약 줄 보장 코드 추가 직전 커밋 aa76051 위에서 실행) | 20/20 (100%), 판정 오류 0건 | 3/3 |
-| **입력 가드 보강 후 (최신)** (`final_eval_guard3.json`, Day 5 제출 코드 탐지 층 이식 후 최종 코드. 이전 보강 단계의 `final_eval_guard.json`·`final_eval_guard2.json`도 20/20) | **20/20 (100%)**, 판정 오류 0건, 사람 확인 필요 0건 | **3/3** |
+| 입력 가드 보강 후 (`final_eval_guard3.json`, Day 5 제출 코드 탐지 층 이식 후 최종 코드. 이전 보강 단계의 `final_eval_guard.json`·`final_eval_guard2.json`도 20/20) | 20/20 (100%), 판정 오류 0건, 사람 확인 필요 0건 | 3/3 |
+| **근거 제한 프롬프트 후 (최신)** (`final_eval_grounding.json`, 생활습관 절을 검색된 지침 내용으로 제한한 최종 코드) | **20/20 (100%)**, 판정 오류 0건, 사람 확인 필요 0건 | **3/3** |
 
-- 최신 결과(2026-11-13, 입력 가드(Day 5 공격 유형) 보강 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20(100%), 판정 오류 0건, 사람 확인 필요 0건. 한 번의 측정값입니다. 자세한 내용은 `evaluation/round2_report.md`의 "입력 가드 보강(Day 5 공격 유형)"을 봅니다.
+- 최신 결과(2026-11-13, 근거 제한 프롬프트 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20(100%), 판정 오류 0건, 사람 확인 필요 0건. 생활습관 절을 검색된 지침 내용으로 제한한 뒤에도 통과율이 유지됐고 RAGAS faithfulness는 0.506에서 0.632로 올랐습니다. 한 번의 측정값입니다.
+- 직전 결과(2026-11-13, 입력 가드(Day 5 공격 유형) 보강 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20(100%), 판정 오류 0건, 사람 확인 필요 0건. 한 번의 측정값입니다. 자세한 내용은 `evaluation/round2_report.md`의 "입력 가드 보강(Day 5 공격 유형)"을 봅니다.
 - 직전 결과(2026-11-13, 판정 요약 줄 보장 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20(100%), 판정 오류 0건, needs_human_review 0건으로 전체 기준 90%를 충족했습니다. 직전 실패였던 #4는 코드가 `[판정 요약]` 줄("- 체질량지수 27.4kg/m² (계산값 27.4): 경계 구간 (기준 25 이상 30 미만)")을 보장해 통과했습니다. 한 번의 측정값입니다. 자세한 내용은 `evaluation/round2_report.md`의 "판정 요약 줄 보장(통합)"을 봅니다.
 - 직전 결과(2026-11-12, 서비스 보완 후, 커밋 e7590e0): positive 7/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 19/20(95%), 실패 #4(체질량지수 판정은 경계로 맞지만 답에서 항목명과 구간이 다른 줄에 적혀 코드 검사가 못 찾음) 1건. 자세한 내용은 `evaluation/round2_report.md`의 "서비스 보완(4번 작업)"을 봅니다.
 - judge 도입 직후 결과(2026-11-12, 커밋 3ebd95e): positive 7/8, negative 2/4, edge 5/5, guardrail 3/3, 전체 17/20(85%)로 전체 기준 90%에 미달했습니다. 실패는 #8(공복 가정 명시 없음), #10(다루지 않는 검사라는 안내 없음), #11(검진 기관 상담 권유 없음)이며 이 세 건을 서비스 보완(4번 작업)에서 코드로 고쳤습니다. 자세한 내용은 `evaluation/round2_report.md`의 "LLM-as-Judge 도입"을 봅니다.
