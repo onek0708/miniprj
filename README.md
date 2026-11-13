@@ -47,7 +47,7 @@
 ```bash
 python -m venv .venv
 .venv/Scripts/activate            # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt      # Python 3.13 권장 (.python-version). 3.14는 RAGAS 의존성(scikit-network) 빌드가 실패합니다
 cp .env.example .env              # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION(us-east-1) 입력
 uvicorn src.app:app --port 8000
 ```
@@ -71,20 +71,22 @@ npm run dev        # 타입 체크·빌드: npm run build
 모델은 Bedrock의 10단계 (리전, 모델 ID) 순서입니다(`src/shared/llm.py`의 모듈 상수 목록 하나이며 RAGAS 심판 `evaluation/run_ragas.py`도 같은 목록을 씁니다). 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 서비스는 그 질문을, RAGAS는 그 회차를 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 trace의 `llm_model` 단계와 결과 파일에 남습니다. Haiku·Nova·gpt-oss는 쓰지 않습니다. AWS 자격 증명은 `.env`에서 읽고 `AWS_DEFAULT_REGION`은 모델 순서와 무관한 기본값입니다. 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
-| 지표 | 최종 값 (17건) | 개선 전 (13건) |
-|---|---|---|
-| context_recall | 0.679 | 0.250 |
-| context_precision | 0.978 | 0.684 |
-| faithfulness | 0.455 | 0.232 |
-| answer_relevancy | 0.412 | 0.516 |
+| 지표 | 최종 코드 기준 (2026-11-13, 16건) | 2차 개선 후 (17건, 옛 설정) | 개선 전 (13건) |
+|---|---|---|---|
+| context_recall | 0.688 | 0.679 | 0.250 |
+| context_precision | 0.975 | 0.978 | 0.684 |
+| faithfulness | 0.506 | 0.455 | 0.232 |
+| answer_relevancy | 0.481 | 0.412 | 0.516 |
 
-- 측정: `python evaluation/run_ragas.py` (ragas 0.4.3). 원본 수치는 `evaluation/results/ragas_round2_improved.json`(최종)과 `ragas_round2.json`(개선 전)에 있습니다.
+최종 코드 기준 값은 main `6d11d0f`(10단계 모델 순서, `temperature=0`, 판정 요약 줄·고정 안내 문장 보장, 도메인별 `src/` 구조, 강화된 입력 가드)로 다시 쟀습니다. 원본은 `evaluation/results/ragas_final.json`입니다.
+
+- 측정: `.venv/Scripts/python evaluation/run_ragas.py --out evaluation/results/ragas_final.json` (ragas 0.4.3, Python 3.13 필요). 원본 수치는 `evaluation/results/ragas_final.json`(최종 코드 기준), `ragas_round2_improved.json`(2차 개선 후), `ragas_round2.json`(개선 전)에 있습니다.
 - 개선 내용:
   - 측정 방식: RAGAS 근거에 코드 판정 결과와 판정 기준(`criteria.json`)을 더했습니다. 서비스 응답의 `contexts`는 그대로입니다.
   - 검색 정확도: 질문 주제와 맞지 않는 지침 조각을 빼는 필터를 넣었습니다(`src/agent.py`).
-- 최종 측정에서 제외한 문항은 3건입니다(#9, #11, #18). 다루지 않는 검사, 수치 없음, 약 요청 차단이라 근거가 하나도 없는 문항입니다.
+- 최종 코드 기준 측정에서 제외한 문항은 4건입니다(#9, #10, #11, #18). 이전에는 3건(#9, #11, #18)이었고, 이번에는 #10도 근거가 비어 빠졌습니다. 이 문항은 다루지 않는 검사라서 고정 안내 문장으로 답합니다. 다루지 않는 검사, 수치 없음, 약 요청 차단이라 근거가 하나도 없는 문항입니다.
 - answer_relevancy는 질문과 답만으로 계산해 이번 수정과 직접 관계가 없습니다. 판정을 하지 않는 답(#12, #17)이 0점으로 들어갔고, 다시 실행하면서 답 문장이 바뀐 문항도 있어 내려갔습니다.
-- 심판 모델: 위 4절의 10단계 모델 순서(회차 단위로 넘어가며 결과 파일에 회차별 채점 모델·리전 기록). 당시 측정은 Sonnet 4.6(ap-northeast-2 global)으로 했습니다. 임베딩: `amazon.titan-embed-text-v2:0`.
+- 심판 모델: 위 4절의 10단계 모델 순서(회차 단위로 넘어가며 결과 파일에 회차별 채점 모델·리전 기록). 최종 코드 기준 측정은 1차(`us.`) 한도 초과로 2차 `global.anthropic.claude-sonnet-4-6`(us-west-2)가 채점했고, 2차 개선 후 측정은 Sonnet 4.6(ap-northeast-2 global)으로 했습니다. 임베딩: `amazon.titan-embed-text-v2:0`.
 - 모범 답안: `test_queries.csv`의 `reference` 열입니다. `criteria.json`과 지침 문서를 근거로 작성했습니다.
 - 통과 기준 없이 숫자만 기록합니다.
 - 계산 규칙(7.4): `answer`와 근거로 계산하고, 근거가 빈 문항은 대상에서 빼고 그 수를 적습니다.

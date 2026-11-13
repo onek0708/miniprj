@@ -523,3 +523,22 @@ Day 5 과제(`sds-ax-training/day05/practice/starter/submission.py`)에 구현�
 | 20문항 (`final_eval_guard3.json`) | 20/20 (positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 판정 오류 0, 사람 확인 필요 0) |
 
 - 한계: 규칙 기반이라 새 표현은 놓칠 수 있다. Day 5처럼 LLM 판별 층은 두지 않았다(가드 판정을 모델에 맡기지 않는다는 SERVICE.md 원칙). 신호 점수제는 정상 질문을 막지 않도록 보수적으로 두어, 약한 신호 하나만 있는 공격은 통과할 수 있다.
+
+## 최종 코드 기준 RAGAS 재측정
+
+모델 순서 변경, `temperature=0`, 판정 요약 줄·고정 안내 문장 보장, `src/` 도메인별 구조, 입력 가드 강화 이후 코드(main `6d11d0f`)로 RAGAS 네 지표를 한 번 다시 쟀다.
+
+- 실행: Python 3.13 가상환경(`.venv`, `requirements.txt` 설치)에서 `python evaluation/run_ragas.py --out evaluation/results/ragas_final.json`. 20문항을 `run_query`로 돌려 근거가 있는 문항만 계산했다.
+- 채점 모델: 1차 `us.anthropic.claude-sonnet-4-6`이 일일 토큰 한도(ThrottlingException)에 걸려 2차 `global.anthropic.claude-sonnet-4-6`(us-west-2)가 회차를 처음부터 다시 채점했다. 임베딩은 `amazon.titan-embed-text-v2:0`.
+- 제외: 근거(contexts)가 비어 계산에서 뺀 문항 4건(#9, #10, #11, #18).
+
+| 지표 | 최종 코드 기준 (16건) | 2차 개선 후 (17건) | 개선 전 (13건) |
+|---|---|---|---|
+| context_recall | 0.6875 | 0.679 | 0.250 |
+| context_precision | 0.975 | 0.978 | 0.684 |
+| faithfulness | 0.5063 | 0.455 | 0.232 |
+| answer_relevancy | 0.4807 | 0.412 | 0.516 |
+
+- 해석: context_recall·precision은 검색 쪽이라 이전 설정과 거의 같다(검색 코드는 바뀌지 않았다). faithfulness와 answer_relevancy는 답 문장에 따라 달라지는 값인데 이번에 조금 올랐다. 측정 대상 문항 수(17 → 16)와 채점 모델이 달라 같은 선에서 정확히 비교할 수는 없다.
+- 이전 리포트들의 "RAGAS 미재측정" 한계는 이 측정으로 해소됐다.
+- 한계: RAGAS는 LLM 채점이라 실행마다 값이 흔들리고, 이번 값도 한 번의 측정이다. 통과 기준 없이 기록만 한다.
