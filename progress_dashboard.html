@@ -173,7 +173,7 @@ footer { color: var(--fg-3); font-size: 12px; }
       <li><span class="when">11-12 22:05</span><span class="dot"></span><div class="what"><b>main 병합 · 푸시 완료 (bd36899)</b> <span>— README·SERVICE.md 갱신까지 원격 반영</span></div></li>
       <li><span class="when">11-13</span><span class="dot"></span><div class="what"><b>판정 요약 줄 보장 이식 20/20</b> <span>— 별도 구현의 요약 줄 보장을 원격 main 위에 옮겨 #4 해소, 문서 갱신</span></div></li>
       <li><span class="when">11-13</span><span class="dot"></span><div class="what"><b>입력 가드 보강 · src 도메인 구조</b> <span>— Day 5 공격 세트 10/10, 추가 6유형, 과제 제출 코드의 탐지 층 이식. src를 judgement·guides·guardrails·assistant·shared로 정리</span></div></li>
-      <li><span class="when">11-13</span><span class="dot now"></span><div class="what"><b>RAGAS 최종 코드 기준 재측정</b> <span>— 16건, recall 0.688 · precision 0.975 · faithfulness 0.506 · relevancy 0.481</span></div></li>
+      <li><span class="when">11-13</span><span class="dot now"></span><div class="what"><b>RAGAS 재측정 · 근거 제한 프롬프트</b> <span>— 16건, faithfulness 0.506 → 0.632, precision 0.993, 20문항 20/20 유지</span></div></li>
       <li><span class="when">Day 10 15:00</span><span class="dot todo"></span><div class="what"><b>제출</b> <span>— Google Form에 github 주소와 구현 시연 캡처본 제출 (저장소는 public 전환 완료)</span></div></li>
     </ul>
   </section>
@@ -197,17 +197,17 @@ footer { color: var(--fg-3); font-size: 12px; }
         </table></div>
       </div>
       <div>
-        <h3>RAGAS 네 지표 (최종 코드 기준 16문항, 근거 없는 4문항 제외)</h3>
+        <h3>RAGAS 네 지표 (16문항, 근거 없는 4문항 제외)</h3>
         <div class="tablewrap"><table>
-          <thead><tr><th>지표</th><th class="num">최종 코드</th><th class="num">2차 개선 후</th><th class="num">개선 전</th></tr></thead>
+          <thead><tr><th>지표</th><th class="num">근거 제한 후</th><th class="num">근거 제한 전</th><th class="num">2차 개선 후</th><th class="num">개선 전</th></tr></thead>
           <tbody>
-            <tr><td class="k">context_recall</td><td class="num">0.688</td><td class="num">0.679</td><td class="num">0.250</td></tr>
-            <tr><td class="k">context_precision</td><td class="num">0.975</td><td class="num">0.978</td><td class="num">0.684</td></tr>
-            <tr><td class="k">faithfulness</td><td class="num">0.506</td><td class="num">0.455</td><td class="num">0.232</td></tr>
-            <tr><td class="k">answer_relevancy</td><td class="num">0.481</td><td class="num">0.412</td><td class="num">0.516</td></tr>
+            <tr><td class="k">context_recall</td><td class="num">0.693</td><td class="num">0.688</td><td class="num">0.679</td><td class="num">0.250</td></tr>
+            <tr><td class="k">context_precision</td><td class="num">0.993</td><td class="num">0.975</td><td class="num">0.978</td><td class="num">0.684</td></tr>
+            <tr><td class="k">faithfulness</td><td class="num">0.632</td><td class="num">0.506</td><td class="num">0.455</td><td class="num">0.232</td></tr>
+            <tr><td class="k">answer_relevancy</td><td class="num">0.461</td><td class="num">0.481</td><td class="num">0.412</td><td class="num">0.516</td></tr>
           </tbody>
         </table></div>
-        <p style="color:var(--fg-3);font-size:12px;margin-top:8px">통과 기준 없이 기록만 하는 지표입니다. 2026-11-13 main <code>6d11d0f</code>으로 한 번 다시 쟀습니다(<code>ragas_final.json</code>). LLM 채점이라 ±0.05 정도는 흔들릴 수 있고, 문항 수(17→16)와 채점 모델이 달라 이전 값과 정확히 같은 선의 비교는 아닙니다.</p>
+        <p style="color:var(--fg-3);font-size:12px;margin-top:8px">통과 기준 없이 기록만 하는 지표입니다. 근거 제한 프롬프트(검색된 지침에 적힌 내용만 쓰기)를 넣은 뒤 같은 채점 모델로 다시 쟀습니다(<code>ragas_grounding.json</code>). faithfulness가 0.506에서 0.632로 올랐습니다. LLM 채점이라 ±0.05 정도는 흔들릴 수 있고, 문항 수(17→16)와 채점 모델이 달라 이전 값과 정확히 같은 선의 비교는 아닙니다.</p>
       </div>
     </div>
   </section>

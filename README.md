@@ -71,14 +71,14 @@ npm run dev        # 타입 체크·빌드: npm run build
 모델은 Bedrock의 10단계 (리전, 모델 ID) 순서입니다(`src/shared/llm.py`의 모듈 상수 목록 하나이며 RAGAS 심판 `evaluation/run_ragas.py`도 같은 목록을 씁니다). 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 서비스는 그 질문을, RAGAS는 그 회차를 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 trace의 `llm_model` 단계와 결과 파일에 남습니다. Haiku·Nova·gpt-oss는 쓰지 않습니다. AWS 자격 증명은 `.env`에서 읽고 `AWS_DEFAULT_REGION`은 모델 순서와 무관한 기본값입니다. 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
-| 지표 | 최종 코드 기준 (2026-11-13, 16건) | 2차 개선 후 (17건, 옛 설정) | 개선 전 (13건) |
-|---|---|---|---|
-| context_recall | 0.688 | 0.679 | 0.250 |
-| context_precision | 0.975 | 0.978 | 0.684 |
-| faithfulness | 0.506 | 0.455 | 0.232 |
-| answer_relevancy | 0.481 | 0.412 | 0.516 |
+| 지표 | **근거 제한 프롬프트 후 (최신, 16건)** | 근거 제한 전 (16건) | 2차 개선 후 (17건, 옛 설정) | 개선 전 (13건) |
+|---|---|---|---|---|
+| context_recall | **0.693** | 0.688 | 0.679 | 0.250 |
+| context_precision | **0.993** | 0.975 | 0.978 | 0.684 |
+| faithfulness | **0.632** | 0.506 | 0.455 | 0.232 |
+| answer_relevancy | **0.461** | 0.481 | 0.412 | 0.516 |
 
-최종 코드 기준 값은 main `6d11d0f`(10단계 모델 순서, `temperature=0`, 판정 요약 줄·고정 안내 문장 보장, 도메인별 `src/` 구조, 강화된 입력 가드)로 다시 쟀습니다. 원본은 `evaluation/results/ragas_final.json`입니다.
+"근거 제한 전"은 main `6d11d0f`(10단계 모델 순서, `temperature=0`, 판정 요약 줄·고정 안내 문장 보장, 도메인별 `src/` 구조, 강화된 입력 가드)로 쟀고(`ragas_final.json`), "근거 제한 후"는 같은 코드에 시스템 프롬프트의 생활습관 절 규칙(검색된 지침에 적힌 내용만 쓰고, 지침이 없으면 "근거 지침 없음"만 쓴다)을 더해 다시 쟀습니다(`ragas_grounding.json`). 두 측정 모두 같은 채점 모델(`global.anthropic.claude-sonnet-4-6`, us-west-2)이 같은 16문항을 채점했습니다.
 
 - 측정: `.venv/Scripts/python evaluation/run_ragas.py --out evaluation/results/ragas_final.json` (ragas 0.4.3, Python 3.13 필요). 원본 수치는 `evaluation/results/ragas_final.json`(최종 코드 기준), `ragas_round2_improved.json`(2차 개선 후), `ragas_round2.json`(개선 전)에 있습니다.
 - 개선 내용:
@@ -125,7 +125,7 @@ npm run dev        # 타입 체크·빌드: npm run build
 - 환경 문제: 첫 측정은 AWS 자격 증명 없음, 다음은 의존성 미설치, 그다음은 일일 토큰 한도로 막혀 코드 개선 효과를 충분히 재지 못했습니다. 다음에는 평가 전에 자격 증명·의존성·한도를 먼저 점검합니다.
 - 실패한 접근 4 — 성능이 낮은 모델로 바꾸기: 한도를 피하려고 Haiku 4.5로 바꿨더니 판정 도구를 부르지 않고 성별을 되물어 11/20에 그쳤습니다(초기 시도). 이후 Sonnet 4.6 주 모델 + Haiku 4.5 예비 모델 방식도 시도했으나 최종 평가가 두 번 모두 14/20(guardrail 2/3, 판정 오류 11건)이었습니다. 주 모델이 한도에 걸려 대부분 Haiku가 답했고, 실패 문항(#2, #3, #4, #7, #16, #20)은 판정 도구를 부르지 않아 trace에 판정이 없었습니다. Haiku 예비 모델을 되돌리고 Sonnet 4.6 5개 → Sonnet 4.5 5개의 10단계 모델 순서로 바꿔 20/20을 회복했습니다.
 - 실패한 접근 5 — 서술형 항목을 채점하지 않기: 키워드·도구 호출만 보던 채점에서는 20/20이었지만, 안내·권유 문장과 표현형 금지 항목을 LLM-as-Judge로 채점하자 17/20으로 내려갔습니다. 점수를 맞추려고 문항·기준·judge를 바꾸지 않고, 빠진 문장(공복 가정, 다루지 않는 검사 안내, 검진 기관 상담 권유)을 모델이 아니라 코드가 고정 문장으로 보장하게 서비스를 고쳐 19/20이 됐습니다. 대신 새 답 구조 때문에 #4가 코드 검사에서 걸려, 답 형식을 바꾸면 채점기와 맞는지 함께 봐야 한다는 것을 배웠습니다.
-- 남은 한계: RAGAS faithfulness 0.51·answer_relevancy 0.48은 제품 수준(관례상 0.7~0.8 이상)에 못 미칩니다. 핵심 원인은 지침 검색이 없거나 부족한 답에서 모델이 근거 없는 생활습관 문장을 덧붙이는 것이며(5절), 개선 방향은 지침이 검색되지 않으면 생활습관 절을 쓰지 않게 하거나 답의 생활습관 문장을 검색된 지침으로 제한하는 것입니다. 강의 고정 모델(Sonnet 4.5)은 6~10차 대체로만 두었고 최종 평가에서는 쓰이지 않았습니다. RAGAS faithfulness(0.455)와 answer_relevancy(0.412)는 아직 낮고, answer_relevancy는 실행마다 답 문장이 달라져 편차가 큽니다. 검색 설정(k, 키워드·벡터 비중)은 아직 RAGAS로 비교해 고르지 않았습니다.
+- 남은 한계: RAGAS faithfulness 0.63·answer_relevancy 0.46은 제품 수준(관례상 0.7~0.8 이상)에 아직 못 미칩니다. 근거 없는 생활습관 문장은 프롬프트 규칙으로 줄여 faithfulness를 0.51에서 0.63으로 올렸고(5절), 남은 개선 방향은 답의 생활습관 문장을 검색된 지침 문장으로 코드로 제한하는 것과 답 길이 줄이기입니다. answer_relevancy가 낮은 이유는 판정 불가 답이 0점이 되는 지표 특성과 표·요약 줄·출처·면책이 붙은 긴 답입니다. 강의 고정 모델(Sonnet 4.5)은 6~10차 대체로만 두었고 최종 평가에서는 쓰이지 않았습니다. RAGAS faithfulness(0.455)와 answer_relevancy(0.412)는 아직 낮고, answer_relevancy는 실행마다 답 문장이 달라져 편차가 큽니다. 검색 설정(k, 키워드·벡터 비중)은 아직 RAGAS로 비교해 고르지 않았습니다.
 
 ## 7-1. 2차 개선 1단계: 검색 설정 비교와 모델 설정 변경
 - 고른 검색 설정: k=3, 같은 비중 RRF 1/(60+순위) 유지(코드 변경 없음). 수치 목표는 두지 않았다.
