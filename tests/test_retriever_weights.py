@@ -1,7 +1,7 @@
 """하이브리드 검색의 RRF 가중치 인자 테스트 (실제 Bedrock 호출 없음)."""
 import inspect
 
-from src import retriever
+from src.guides import retrieval as retriever
 
 
 def _c(name):

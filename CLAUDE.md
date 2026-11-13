@@ -72,12 +72,32 @@ These guidelines are working if: fewer unnecessary changes in diffs, fewer rewri
 - 모델은 Amazon Bedrock (ChatBedrockConverse)
 - Agent 생성은 langchain.agents 의 create_agent 를 쓴다
 
-## 폴더 구조 (제출 규약. 바꾸지 않는다)
-src/agent.py       메인 에이전트 그래프
-src/tools.py       도메인 도구
-src/retriever.py   RAG 파이프라인
-data/              사용한 문서와 데이터
-evaluation/        test_queries.csv 와 평가 리포트
+## 폴더 구조 (제출 규약 + 도메인별 src/)
+제출 규약상 필수 파일 이름(`src/agent.py`, `src/tools.py`, `src/retriever.py`)과 `data/`, `evaluation/`은 유지한다.
+`src/` 안은 기술 역할이 아니라 도메인(기능)별 폴더로 나눈다.
+
+```
+src/
+├── agent.py        메인 에이전트 그래프 (제출 규약 필수). 도구 연결(_build_tools), 모델 순서 전환(_invoke_agent), run_query
+├── tools.py        도메인 도구 진입점 (제출 규약 필수). 구현은 judgement/engine.py를 다시 내보내기만 한다
+├── retriever.py    RAG 파이프라인 진입점 (제출 규약 필수). 구현은 guides/retrieval.py를 다시 내보내기만 한다
+├── app.py          POST /query API 진입점
+├── judgement/      판정 도메인: engine.py(판정·BMI 계산 규칙, 코드가 판정), schemas.py(도구 출력 스키마)
+├── guides/         지침 검색 도메인: retrieval.py(지침 문서 하이브리드 RAG)
+├── guardrails/     가드레일 도메인: input_guard.py(G1·G2 차단, G4 마스킹, G5 지시문 제거), output_guard.py(구간·요약·가정·진료 안내·근거 보장)
+├── assistant/      응답 도메인: prompts.py(시스템 프롬프트·고정 문장), schemas.py(응답 스키마), trace.py(trace 기록)
+└── shared/         여러 도메인이 함께 쓰는 것만: llm.py(MODEL_ORDER, 한도 오류 판별, 모델 생성)
+data/               사용한 문서와 데이터
+evaluation/         test_queries.csv 와 평가 리포트
+```
+
+### src/ 파일 배치 규칙
+- 새 코드는 먼저 어느 도메인(판정·지침 검색·가드레일·응답)에 속하는지 정하고 그 폴더에 둔다. 도메인 폴더에는 실행 로직, 프롬프트·고정 문장, 입출력 스키마를 함께 둔다. `utils`·`models` 같은 기술 역할 폴더는 만들지 않는다.
+- 둘 이상의 도메인이 쓰는 LLM 설정·유틸리티만 `src/shared/`에 둔다. 한 도메인만 쓰면 그 도메인에 둔다.
+- 도메인끼리는 필요한 쪽에서 가져다 쓴다(예: `guardrails`가 `guides`를 사용). 순환 import를 만들지 않는다.
+- `src/agent.py`·`tools.py`·`retriever.py`는 제출 규약 때문에 남긴 진입 파일이다. 로직을 새로 쌓지 말고 도메인 폴더에서 가져오게 한다.
+- 모델은 `src/shared/llm.py`의 `build_chat_model`로만 만든다(모듈 최상단에서 만들지 않는다).
+- 테스트는 `tests/`에 두고, 모듈 속성을 바꿔치는(monkeypatch) 대상은 그 이름을 실제로 쓰는 모듈이다(예: 근거 검색은 `guardrails.output_guard`, 도구는 `agent`).
 
 ## 주고받는 형식 (제출 규약)
 - POST /query 로 받고 question 필드를 읽는다

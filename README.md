@@ -58,7 +58,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 ```
 테스트: `python -m pytest -q tests`, 평가: `python evaluation/run_eval.py --out evaluation/results/round2.json`
 
-모델은 Bedrock의 10단계 (리전, 모델 ID) 순서입니다(`src/agent.py`의 모듈 상수 목록 하나이며 RAGAS 심판 `evaluation/run_ragas.py`도 같은 목록을 씁니다). 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 서비스는 그 질문을, RAGAS는 그 회차를 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 trace의 `llm_model` 단계와 결과 파일에 남습니다. Haiku·Nova·gpt-oss는 쓰지 않습니다. AWS 자격 증명은 `.env`에서 읽고 `AWS_DEFAULT_REGION`은 모델 순서와 무관한 기본값입니다. 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
+모델은 Bedrock의 10단계 (리전, 모델 ID) 순서입니다(`src/shared/llm.py`의 모듈 상수 목록 하나이며 RAGAS 심판 `evaluation/run_ragas.py`도 같은 목록을 씁니다). 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 서비스는 그 질문을, RAGAS는 그 회차를 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 trace의 `llm_model` 단계와 결과 파일에 남습니다. Haiku·Nova·gpt-oss는 쓰지 않습니다. AWS 자격 증명은 `.env`에서 읽고 `AWS_DEFAULT_REGION`은 모델 순서와 무관한 기본값입니다. 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
 | 지표 | 최종 값 (17건) | 개선 전 (13건) |
@@ -119,9 +119,11 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 - 모델 설정 변경(이력): 이 단계에서는 `us-west-2` 주 모델 `us.anthropic.claude-sonnet-4-6` + Haiku 4.5 예비 모델로 바꿨다(서울 리전 global 모델과 us-east-1이 일일 토큰 한도에 걸려 측정이 중단됐기 때문). 이 Haiku 예비 모델 설정은 최종 확인에서 14/20이 나와 되돌렸고, 현재는 4절의 10단계 모델 순서가 서비스와 RAGAS 심판에 적용된다. 서비스는 질문 단위, RAGAS는 회차 단위로 넘어간다. 아래 측정 결과(k=3 유지, 벡터 우선 회차의 채점 모델 섞임)는 당시 설정 기준 기록이며 다시 측정하지 않았다.
 
 ## 8. 핵심 코드 위치
-- `src/agent.py`: `run_query`(진입·면책), 출력 가드(`ensure_band_consistency`, `ensure_evidence`, `ensure_referral`, `ensure_assumptions`), `_build_tools`
-- `src/tools.py`: `judge_checkup_item`, `judge_blood_pressure`, `calc_bmi`
-- `src/retriever.py`: `hybrid_search`, `retrieve_guides`
-- `src/guards.py`: `input_guard`, `redact_pii`, `strip_injection`
+- `src/agent.py`: `run_query`(진입·면책), `_build_tools`, `_invoke_agent`(모델 순서 전환). 제출 규약상 필수 파일
+- `src/tools.py`: 도메인 도구 진입점(구현은 `src/judgement/engine.py`: `judge_checkup_item`, `calc_bmi`)
+- `src/retriever.py`: RAG 파이프라인 진입점(구현은 `src/guides/retrieval.py`: `hybrid_search`, `retrieve_guides`)
+- `src/guardrails/input_guard.py`: `input_guard`, `redact_pii`, `strip_injection`
+- `src/guardrails/output_guard.py`: `ensure_band_consistency`, `ensure_summary`, `ensure_evidence`, `ensure_referral`, `ensure_assumptions`
+- `src/assistant/`: 시스템 프롬프트·고정 문장(`prompts.py`), 응답 스키마, trace 기록. `src/shared/llm.py`: 모델 순서(`MODEL_ORDER`)와 모델 생성
 - `src/app.py`: `POST /query`
 - `data/criteria.json`: 판정 구간과 출처(기관명·기준일), `data/guides/*.md`: 지침 문서
