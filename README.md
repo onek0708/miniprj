@@ -58,6 +58,16 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 ```
 테스트: `python -m pytest -q tests`, 평가: `python evaluation/run_eval.py --out evaluation/results/round2.json`
 
+웹 화면 (`web/`, React + TypeScript + Vite): 위 백엔드를 8000번으로 띄운 상태에서 다른 터미널로 실행하고 http://localhost:5173 에 접속합니다. Node.js가 필요합니다.
+```bash
+cd web
+npm install
+npm run dev        # 타입 체크·빌드: npm run build
+```
+- 질문을 입력하면 답변(마크다운, 표 포함), 근거 지침(`contexts`), 판정·도구 호출 과정(`trace`)을 한 화면에서 펼쳐 볼 수 있습니다. 로딩·오류 상태와 예시 질문 버튼이 있습니다.
+- Vite 개발 서버가 `/query` 요청을 `http://127.0.0.1:8000`으로 넘기므로(`web/vite.config.ts`의 프록시) 백엔드에 CORS 설정이 필요 없습니다.
+- 추가 라이브러리는 마크다운 렌더러 `react-markdown`과 표 지원 `remark-gfm`뿐입니다.
+
 모델은 Bedrock의 10단계 (리전, 모델 ID) 순서입니다(`src/shared/llm.py`의 모듈 상수 목록 하나이며 RAGAS 심판 `evaluation/run_ragas.py`도 같은 목록을 씁니다). 1~5차 Sonnet 4.6: us-west-2 `us.anthropic.claude-sonnet-4-6` → us-west-2 `global.anthropic.claude-sonnet-4-6` → us-east-1 `us.…` → us-east-1 `global.…` → ap-northeast-2 `global.…`. 6~10차 Sonnet 4.5: 같은 리전 순서로 `anthropic.claude-sonnet-4-5-20250929-v1:0`(`us.`/`global.`). 일일 토큰 한도(ThrottlingException)에 걸리면 서비스는 그 질문을, RAGAS는 그 회차를 다음 차수로 처음부터 다시 처리하고, 답한 모델·리전은 trace의 `llm_model` 단계와 결과 파일에 남습니다. Haiku·Nova·gpt-oss는 쓰지 않습니다. AWS 자격 증명은 `.env`에서 읽고 `AWS_DEFAULT_REGION`은 모델 순서와 무관한 기본값입니다. 임베딩은 `amazon.titan-embed-text-v2:0`입니다. 비밀 값은 `.env`에서만 읽고 저장소에 넣지 않습니다.
 
 ## 5. RAGAS 평가 결과
@@ -129,3 +139,4 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 - `src/assistant/`: 시스템 프롬프트·고정 문장(`prompts.py`), 응답 스키마, trace 기록. `src/shared/llm.py`: 모델 순서(`MODEL_ORDER`)와 모델 생성
 - `src/app.py`: `POST /query`
 - `data/criteria.json`: 판정 구간과 출처(기관명·기준일), `data/guides/*.md`: 지침 문서
+- `web/src/App.tsx`: 웹 화면(질문 입력, 답변·근거 지침, 로딩·오류 상태), `web/src/TracePanel.tsx`: 판정·도구 호출 과정(trace) 단계별 보기, `web/src/api.ts`: `POST /query` 호출과 응답 타입, `web/vite.config.ts`: 백엔드 프록시 설정
