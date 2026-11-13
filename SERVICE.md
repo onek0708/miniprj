@@ -152,7 +152,7 @@
 - **RAGAS 측정**: 네 지표(context_recall, context_precision, faithfulness, answer_relevancy)는 통과 기준 없이 숫자만 기록한다.
   - 평가 질문은 `evaluation/test_queries.csv` 20건이다. 모범 답안은 `reference` 열로, `criteria.json`과 지침 문서를 근거로 쓴다.
   - 심판 모델은 서비스와 같은 10단계 모델 순서를 회차 단위로 쓴다(한 회차는 한 모델로만 채점). 기록된 RAGAS 값은 10단계 순서로 바꾸기 전 Sonnet 4.6(ap-northeast-2)으로 잰 것이다. 실행 스크립트는 `evaluation/run_ragas.py`다.
-  - 서비스 응답의 `contexts`는 `GUIDE.md` 정의(지침 검색 결과)대로 둔다. 평가할 때만 `trace`의 코드 판정 결과·계산값과 해당 항목의 판정 기준(`criteria.json` 구간·출처)을 근거에 더한다. 답의 판정 문장이 실제로는 코드 판정에 근거하기 때문이다.
+  - 서비스 응답의 `contexts`는 mini PJT 페이지 §4-2 API 규약의 `contexts`(검색된 지침 조각의 `doc_id`·`text`)대로 둔다. 평가할 때만 `trace`의 코드 판정 결과·계산값과 해당 항목의 판정 기준(`criteria.json` 구간·출처)을 근거에 더한다. 답의 판정 문장이 실제로는 코드 판정에 근거하기 때문이다.
   - 근거가 하나도 없는 문항은 계산에서 빼고 그 수를 리포트에 적는다.
   - 결과는 `evaluation/round2_report.md`와 README 5장에 기록한다.
 
@@ -175,4 +175,4 @@
   - answer_relevancy의 실행 간 편차 줄이기
   - MCP 서버 연동(선택)
 
-확정된 항목: 사용자(40~50대 직장인), 제출 구조(`GUIDE.md`의 `src/`·`evaluation/test_queries.csv`, 과제 저장소용 `app.py`·`eval_set.json`은 만들지 않음), API 형식(`POST /query` → `answer`·`contexts`·`trace`), 판정 3단계와 반개구간, 판정·보류 규칙, 응답 구성과 고정 면책, 오류·검색 실패 시 응답, 가드레일 5건(입력·출력 가드 모두 1차부터), 기능 성공 기준 10개(1차부터), 기술 스택
+확정된 항목: 사용자(40~50대 직장인), 제출 구조(mini PJT 페이지 §4-1의 `src/`·`evaluation/test_queries.csv`), API 형식(`POST /query` → `answer`·`contexts`·`trace`), 판정 3단계와 반개구간, 판정·보류 규칙, 응답 구성과 고정 면책, 오류·검색 실패 시 응답, 가드레일 5건(입력·출력 가드 모두 1차부터), 기능 성공 기준 10개(1차부터), 기술 스택
