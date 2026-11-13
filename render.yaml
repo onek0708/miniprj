@@ -1,0 +1,20 @@
+# Render 블루프린트: 백엔드(FastAPI) 무료 웹 서비스.
+# AWS 키는 저장소에 적지 않는다. sync: false 항목은 Render 화면에서 직접 입력한다.
+services:
+  - type: web
+    name: health-checkup-assistant
+    runtime: python
+    plan: free
+    branch: deploy
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: uvicorn src.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /docs
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: AWS_DEFAULT_REGION
+        value: us-east-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false

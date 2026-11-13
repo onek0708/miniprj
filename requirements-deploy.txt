@@ -1,0 +1,11 @@
+# 서버 배포(Render)용 최소 의존성. 서비스 실행(src/)에 필요한 것만 두고, 평가(ragas)·테스트(pytest, httpx)는 뺀다.
+fastapi
+uvicorn
+pydantic
+python-dotenv
+boto3
+langchain
+langchain-aws
+langchain-chroma
+chromadb
+langgraph
