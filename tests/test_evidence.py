@@ -2,6 +2,7 @@
 import json
 
 from src import agent
+from src.guardrails import output_guard
 from src.tools import judge_checkup_item
 
 
@@ -36,6 +37,7 @@ def test_guide_question_without_judgment_gets_contexts():
 
 def test_zero_results_states_no_guide_and_invents_nothing(monkeypatch):
     monkeypatch.setattr(agent, "retrieve_guides", lambda q: ([], {}))
+    monkeypatch.setattr(output_guard, "retrieve_guides", lambda q: ([], {}))
     r = judge_checkup_item("공복혈당", 130, "mg/dL", "남", True)
     out, ctx = agent.ensure_evidence("질환의심입니다.", "공복혈당 130", [], _trace(r))
     assert ctx == [] and "근거 지침 없음" in out and "[지침 출처]" not in out
@@ -46,6 +48,7 @@ def test_retrieval_exception_states_no_guide(monkeypatch):
     def boom(q):
         raise RuntimeError("chroma down")
     monkeypatch.setattr(agent, "retrieve_guides", boom)
+    monkeypatch.setattr(output_guard, "retrieve_guides", boom)
     out, ctx = agent.ensure_evidence("답.", "식습관 지침", [], [])
     assert ctx == [] and "근거 지침 없음" in out
 
@@ -61,6 +64,7 @@ def test_no_duplicate_when_already_cited():
 def test_unsupported_exam_drops_unrelated_guides_and_skips_search(monkeypatch):
     called = []
     monkeypatch.setattr(agent, "retrieve_guides", lambda q: called.append(q) or ([], {}))
+    monkeypatch.setattr(output_guard, "retrieve_guides", lambda q: called.append(q) or ([], {}))
     ctxs = [{"doc_id": "guides/blood_pressure.md#혈압 - 재검사", "text": "t"}]
     out, ctx = agent.ensure_evidence("다루지 않는 검사입니다.", "위암 검진 결과가 이상 소견이래요 어떻게 해석해요", ctxs, [])
     assert ctx == [] and called == [] and out == "다루지 않는 검사입니다."

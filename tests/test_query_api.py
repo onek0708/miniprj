@@ -76,7 +76,7 @@ def test_blocked_without_value_skips_agent(monkeypatch):
 
 
 def test_normal_diet_question_not_blocked():
-    from src.guards import input_guard
+    from src.guardrails.input_guard import input_guard
     for q in ("혈압을 낮추는 식습관 알려줘", "콜레스테롤 낮추는 생활습관은?", "혈당 관리 운동법"):
         assert not input_guard(q)["blocked"]
 

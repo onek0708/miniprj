@@ -1,7 +1,7 @@
 """입력 가드의 약 요청 감지(G2_drug) 단위 테스트."""
 import pytest
 
-from src.guards import input_guard
+from src.guardrails.input_guard import input_guard
 
 
 @pytest.mark.parametrize("q", [
