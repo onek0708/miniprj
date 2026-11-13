@@ -134,7 +134,7 @@ footer { color: var(--fg-3); font-size: 12px; }
     <div class="tile good"><div class="label">판정 오류</div><div class="num">0건</div><div class="sub">trace와 답의 구간 대조</div></div>
     <div class="tile good"><div class="label">단위 테스트</div><div class="num">227</div><div class="sub">전부 통과 · 테스트 파일 22개</div></div>
     <div class="tile good"><div class="label">패턴 적용 (12개 중)</div><div class="num">8</div><div class="sub">필수 4개 모두 포함 · 목표 8</div></div>
-    <div class="tile warn"><div class="label">완료 기준 (GUIDE 9장)</div><div class="num">12 / 13</div><div class="sub">남은 것: Google Form 제출</div></div>
+    <div class="tile warn"><div class="label">제출 규약 체크리스트</div><div class="num">12 / 13</div><div class="sub">남은 것: Google Form 제출</div></div>
   </div>
 
   <section>
@@ -172,7 +172,7 @@ footer { color: var(--fg-3); font-size: 12px; }
       <li><span class="when">11-12 21:33</span><span class="dot"></span><div class="what"><b>서비스 보완 19/20</b> <span>— temperature=0, 고정 안내 문장, 공복 가정 보장, 약 요청 가드 보강</span></div></li>
       <li><span class="when">11-12 22:05</span><span class="dot"></span><div class="what"><b>main 병합 · 푸시 완료 (bd36899)</b> <span>— README·SERVICE.md 갱신까지 원격 반영</span></div></li>
       <li><span class="when">11-13</span><span class="dot now"></span><div class="what"><b>판정 요약 줄 보장 이식 20/20</b> <span>— 별도 구현의 요약 줄 보장을 원격 main 위에 옮겨 #4 해소, 문서 갱신</span></div></li>
-      <li><span class="when">Day 10 15:00</span><span class="dot todo"></span><div class="what"><b>제출</b> <span>— 저장소 public 전환 후 Google Form 제출</span></div></li>
+      <li><span class="when">Day 10 15:00</span><span class="dot todo"></span><div class="what"><b>제출</b> <span>— 저장소 public 전환 후 Google Form에 github 주소와 구현 시연 캡처본 제출</span></div></li>
     </ul>
   </section>
 
@@ -226,11 +226,11 @@ footer { color: var(--fg-3); font-size: 12px; }
           </tbody>
         </table></div>
 
-        <h3>GUIDE.md 완료 기준 체크리스트</h3>
+        <h3>제출 규약(mini PJT §4~6) 체크리스트</h3>
         <ul class="check">
           <li><span class="box on">✓</span><span>폴더 구조 규약 (<code>src/agent.py</code>·<code>tools.py</code>·<code>retriever.py</code>, <code>data/</code>, <code>evaluation/</code>)</span></li>
           <li><span class="box on">✓</span><span>SERVICE.md 템플릿 5개 항목</span></li>
-          <li><span class="box on">✓</span><span>test_queries.csv 7컬럼 · 20건 · 네 카테고리</span></li>
+          <li><span class="box on">✓</span><span>test_queries.csv 필수 7컬럼 + 추가 reference 컬럼 · 20건 · 네 카테고리</span></li>
           <li><span class="box on">✓</span><span><code>POST /query</code> → answer·contexts·trace (차단 포함)</span></li>
           <li><span class="box on">✓</span><span>2차 평가 90% 이상 · guardrail 100% · 판정 오류 0 · 경계값 단위 테스트</span></li>
           <li><span class="box on">✓</span><span>run_eval.py가 카테고리별·전체 통과율 출력과 파일 저장</span></li>
@@ -240,7 +240,7 @@ footer { color: var(--fg-3); font-size: 12px; }
           <li><span class="box on">✓</span><span>필수 패턴 1·3·11·12 구현</span></li>
           <li><span class="box on">✓</span><span>criteria.json·지침 문서에 출처와 확인 날짜</span></li>
           <li><span class="box on">✓</span><span>.env와 키가 저장소에 없음</span></li>
-          <li><span class="box half">!</span><span>Day 10 15:00 전 Google Form 제출 <small>— 저장소 public 전환 뒤 제출</small></span></li>
+          <li><span class="box half">!</span><span>Day 10 15:00 전 Google Form 제출 <small>— github 주소(public) 또는 zip, 구현 시연 캡처본 업로드</small></span></li>
         </ul>
       </div>
       <div>
@@ -261,7 +261,7 @@ footer { color: var(--fg-3); font-size: 12px; }
           </tbody>
         </table></div>
 
-        <h3>채점 방식 (GUIDE 7.3, 코드 우선 혼합)</h3>
+        <h3>채점 방식 (코드 우선 혼합)</h3>
         <div class="tablewrap"><table>
           <thead><tr><th>무엇을</th><th>누가</th></tr></thead>
           <tbody>
@@ -281,11 +281,10 @@ footer { color: var(--fg-3); font-size: 12px; }
       <div class="item"><span class="chip warn">선택</span><div><b>RAGAS 마지막 1회 재측정</b><p>현재 값은 옛 설정 기준이라고 README에 적혀 있어 규약상 문제는 없습니다. 호출이 수백 회라 Bedrock 한도를 확인하고 한 번만 잽니다.</p></div></div>
       <div class="item"><span class="chip warn">선택</span><div><b>약 요청 가드 오탐</b><p>"예약 후 밥 먹고 검진 받아도 되나요" 같은 질문이 약 요청으로 차단되는 오탐이 남아 있습니다(미수정). 통과 기준에는 영향 없음.</p></div></div>
       <div class="item"><span class="chip warn">선택</span><div><b>검색 품질 코드 채점 (3번 작업)</b><p>문항별 정답 지침 문서 목록을 사람이 확정해야 하고, 새 파일이 필요합니다. LLM 호출 없이 몇 초 만에 비교 가능.</p></div></div>
-      <div class="item"><span class="chip info">강사 확인</span><div><b>열린 질문</b><p><code>app.py</code>·<code>eval_set.json</code>을 따로 내야 하는지, 별도 public 저장소여도 되는지, RAGAS를 ragas 패키지로 내야 하는지 (GUIDE.md 10장).</p></div></div>
     </div>
   </section>
 
-  <footer>원본: README.md, SERVICE.md, GUIDE.md, evaluation/round1_report.md·round2_report.md, evaluation/results/*.json (브랜치 integrate-from-ralph). 숫자는 결과 파일에서 읽어 적었습니다.</footer>
+  <footer>원본: README.md, SERVICE.md, evaluation/round1_report.md·round2_report.md, evaluation/results/*.json (브랜치 integrate-from-ralph). 숫자는 결과 파일에서 읽어 적었습니다.</footer>
 </div>
 
 <script>
