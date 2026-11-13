@@ -10,7 +10,7 @@
 - Day 2: RAG (하이브리드 검색) — 키워드 검색과 Chroma 벡터 검색(Titan 임베딩)을 합쳐 `data/guides/*.md`에서 지침을 찾고, 결과를 `contexts`(`파일명#헤더`)로 돌려줍니다. (`src/retriever.py`)
 - Day 3: ReAct — `create_agent`가 질문에 따라 판정·계산·검색 도구를 골라 호출합니다.
 - Day 4: 도구 다중 — 한 질문에 `judge_checkup_item`, `judge_blood_pressure`, `calc_bmi`, 지침 검색을 함께 씁니다.
-- Day 5: 가드레일 — 입력 가드(진단 확정·약 요청 차단, 인젝션 제거, 개인정보(주민등록번호·전화번호·이메일) 마스킹)와 출력 가드(구간 표기 대조, 진료 안내·출처·가정 보충)를 코드로 둡니다. 인젝션은 Day 5 방식(덮어쓰는 동작과 현재 지시 대상이 함께 나올 때만 감지)으로 잡으며, 강의 실습과 과제 저장소의 Day 5 공격 세트 각 10문항을 모두 감지하고 정상 문장 오탐은 없습니다. (`src/guardrails/input_guard.py`, `src/guardrails/output_guard.py`)
+- Day 5: 가드레일 — 입력 가드(진단 확정·약 요청 차단, 인젝션 제거, 개인정보(주민등록번호·전화번호·이메일) 마스킹)와 출력 가드(구간 표기 대조, 진료 안내·출처·가정 보충)를 코드로 둡니다. 인젝션은 Day 5 방식(덮어쓰는 동작과 현재 지시 대상이 함께 나올 때만 감지)으로 잡으며, 강의 실습과 과제 저장소의 Day 5 공격 세트 각 10문항과 추가 공격 유형 6가지(서버 종료 명령, 권한 상승, 역할극, 프롬프트 요약, 규칙 목록 나열, 맥락 초기화)를 모두 감지하고 정상 문장 오탐은 없습니다. (`src/guardrails/input_guard.py`, `src/guardrails/output_guard.py`)
 - Day 5: 미들웨어 — 개인정보 마스킹, 모델 호출 실패 시 고정 안내 문구로 응답하고 서버는 멈추지 않습니다.
 - Day 7: Observability — 응답 `trace`에 단계별(가드, 도구 호출, 검색) 기록을 남깁니다.
 - Day 7: 평가 — 질문 20건 인-아웃 세트와 `evaluation/run_eval.py`로 카테고리별·전체 통과율을 잽니다.
@@ -93,7 +93,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 | **LLM-as-Judge 도입 후** (코드 검사+judge, `final_eval_llm_judge.json`, 커밋 3ebd95e) | **17/20 (85%)**, 기준 90% 미달, needs_human_review 0건 | **3/3** |
 | 서비스 보완 후 (`final_eval_service_fix.json`, 커밋 e7590e0) | 19/20 (95%), 기준 충족 (실패 #4 1건) | 3/3 |
 | 판정 요약 줄 보장 후 (`final_eval_integrated.json`, 판정 요약 줄 보장 코드 추가 직전 커밋 aa76051 위에서 실행) | 20/20 (100%), 판정 오류 0건 | 3/3 |
-| **입력 가드 보강 후 (최신)** (`final_eval_guard.json`, 최종 코드) | **20/20 (100%)**, 판정 오류 0건, 사람 확인 필요 0건 | **3/3** |
+| **입력 가드 보강 후 (최신)** (`final_eval_guard2.json`, 추가 공격 유형 보강 후 최종 코드. 첫 보강 직후 `final_eval_guard.json`도 20/20) | **20/20 (100%)**, 판정 오류 0건, 사람 확인 필요 0건 | **3/3** |
 
 - 최신 결과(2026-11-13, 입력 가드(Day 5 공격 유형) 보강 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20(100%), 판정 오류 0건, 사람 확인 필요 0건. 한 번의 측정값입니다. 자세한 내용은 `evaluation/round2_report.md`의 "입력 가드 보강(Day 5 공격 유형)"을 봅니다.
 - 직전 결과(2026-11-13, 판정 요약 줄 보장 후): positive 8/8, negative 4/4, edge 5/5, guardrail 3/3, 전체 20/20(100%), 판정 오류 0건, needs_human_review 0건으로 전체 기준 90%를 충족했습니다. 직전 실패였던 #4는 코드가 `[판정 요약]` 줄("- 체질량지수 27.4kg/m² (계산값 27.4): 경계 구간 (기준 25 이상 30 미만)")을 보장해 통과했습니다. 한 번의 측정값입니다. 자세한 내용은 `evaluation/round2_report.md`의 "판정 요약 줄 보장(통합)"을 봅니다.
@@ -103,7 +103,7 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
 
 - 개선폭: 1차 6/20 → 최종 20/20. 2차 당시에는 #18 하나(채점기 `용량` 오탐 수정)만 통과로 바뀌었고, 나머지는 자격 증명 보완과 모델 변경 후 통과했습니다. 마지막 #16은 프롬프트 정제(성별을 되묻지 않기)와 채점기의 남녀 표기 인정으로 통과했습니다. 측정별 자세한 내용은 `evaluation/round2_report.md`의 "추가 재측정"을 봅니다.
 - 목표(전체 90%, guardrail 100%): judge 도입 전 채점에서는 20/20으로 달성했고, judge 도입 직후에는 85%로 미달했다가 서비스 보완 후 19/20(95%), 판정 요약 줄 보장 후 20/20(100%)으로 다시 충족했습니다. 위 20/20과 19/20, 20/20은 10단계 모델 순서로 잰 결과이며 실제로는 Sonnet 4.6이 답했습니다.
-- 기능 성공 기준 10개와 단위 테스트(279개 통과)는 `tests/`에서 확인합니다. 리포트: `evaluation/round1_report.md`, `evaluation/round2_report.md`.
+- 기능 성공 기준 10개와 단위 테스트(299개 통과)는 `tests/`에서 확인합니다. 리포트: `evaluation/round1_report.md`, `evaluation/round2_report.md`.
 
 ## 7. 트라이앤에러 회고
 - 실패한 접근 1 — 모델에게 구간 판정까지 맡기는 방식: 숫자 비교를 틀릴 수 있어 폐기했습니다. 최종은 코드 판정 + 모델 설명으로 분리했고, 출력 가드가 답에 적힌 구간을 `trace`의 판정 결과와 대조해 바로잡습니다.
